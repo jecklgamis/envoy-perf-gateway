@@ -33,11 +33,11 @@ func init() {
 	if err != nil {
 		cwd = "."
 	}
-	defaultValues := filepath.Join(cwd, "values.yaml")
+	defaultValues := filepath.Join(cwd, "config", "values.yaml")
 	defaultRendered := filepath.Join(cwd, "rendered")
 
 	rootCmd.PersistentFlags().StringVar(&valuesPath, "values", envOr("GATEWAYCTL_VALUES", defaultValues),
-		"Path to values.yaml. Defaults to values.yaml in the current working directory.")
+		"Path to values.yaml. Defaults to config/values.yaml in the current working directory.")
 	rootCmd.PersistentFlags().StringVar(&renderedDir, "rendered-dir", envOr("GATEWAYCTL_RENDERED_DIR", defaultRendered),
 		"Directory to write rendered cds.yaml/lds.yaml into.")
 }

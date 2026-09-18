@@ -1,13 +1,13 @@
 # Architecture
 
-![architecture diagram](../architecture.png)
+![architecture diagram](architecture.png)
 
 ```
 gatewayctl (host)                                  Envoy container
   add-backend/remove-backend                     +-------------------------------+
         |                                         | config-fetcher (supervisor)  |
         v                                         |   polls HTTP or S3           |
-  values.yaml -> render -> rendered/{cds,lds}.yaml |   atomic-writes into --v      |
+  config/values.yaml -> render -> rendered/{cds,lds}.yaml |   atomic-writes into -v |
         |                                         v                          |   |
         |                              /etc/envoy/dynamic  <------------------+
         |  HTTP: gatewayctl push-http uploads to config_server's own storage/       |
@@ -28,8 +28,9 @@ Instead, the `fetcher/` binary (compiled Go, statically linked) runs
 *inside* the container (via `supervisor.ini`) and polls a remote source for
 `cds.yaml`/`lds.yaml`, writing them into `/etc/envoy/dynamic` itself - a
 write native to the container's own filesystem, which does trigger Envoy's
-inotify watch. `gatewayctl` on the host only ever writes to `values.yaml`
-and the local `rendered/` directory; it never touches the container's
+inotify watch. `gatewayctl` on the host only ever writes to
+`config/values.yaml` and the local `rendered/` directory; it never touches
+the container's
 filesystem directly. Both `gatewayctl` and the fetcher write atomically
 (temp file + rename, not delete-then-write) so a reader never observes a
 missing or partial file mid-swap.

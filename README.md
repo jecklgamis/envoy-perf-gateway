@@ -14,11 +14,11 @@ gatewayctl --help
 it's easy to hand to teammates who don't have Go (or anything else)
 installed at all. `gatewayctl/` is a self-contained module (own `go.mod`, own `Makefile`),
 structured as if it were a separate repo even though it lives inside this
-one. `values.yaml` and the `rendered/` output directory default to the
-current working directory and can be pointed elsewhere with
-`--values`/`--rendered-dir` (or `GATEWAYCTL_VALUES`/`GATEWAYCTL_RENDERED_DIR`),
-e.g. to run against multiple checkouts or a values file living outside any
-repo.
+one. `config/values.yaml` and the `rendered/` output directory default to
+paths relative to the current working directory and can be pointed
+elsewhere with `--values`/`--rendered-dir` (or
+`GATEWAYCTL_VALUES`/`GATEWAYCTL_RENDERED_DIR`), e.g. to run against
+multiple checkouts or a values file living outside any repo.
 
 ### Building gatewayctl for other platforms
 
@@ -82,8 +82,8 @@ after each change (or export `CONFIG_S3_BUCKET`/`CONFIG_S3_PREFIX` so the
 flag can be omitted) for the fetcher to pick it up.
 
 Enable S3 bucket versioning so pushes are rollback-able via
-`aws s3api list-object-versions` / `restore-object`. `values.yaml` is the
-human-authored source of truth and is a good candidate to `git commit`
+`aws s3api list-object-versions` / `restore-object`. `config/values.yaml`
+is the human-authored source of truth and is a good candidate to `git commit`
 before each render/push, so backend changes have real history on both
 sides.
 
