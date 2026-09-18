@@ -7,8 +7,8 @@ image:
 	docker build -t $(IMAGE_NAME):$(IMAGE_TAG) .
 # HTTP source mode: the config-fetcher binary inside the container polls
 # config_server, which you must run first (make -C config_server up).
-# host.docker.internal lets the container reach the host. Set
-# CONFIG_API_TOKEN if the server requires one.
+# host.docker.internal lets the container reach the host. config_server
+# always requires API_TOKEN now, so CONFIG_API_TOKEN must be set here too.
 run:
 	-docker rm -f $(IMAGE_NAME) 2>/dev/null
 	docker run --name $(IMAGE_NAME) \

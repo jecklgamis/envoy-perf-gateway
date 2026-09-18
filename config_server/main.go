@@ -56,10 +56,11 @@ func logf(format string, args ...any) {
 		time.Now().Format("2006-01-02 15:04:05,000"), fmt.Sprintf(format, args...))
 }
 
-// checkAuth gates /config/* on API_TOKEN if it's set. /healthz is never
-// gated, so liveness probes don't need the token.
+// checkAuth gates /config/* on API_TOKEN, which main() requires to be set
+// before the server starts - so it's always on, not opt-in. /healthz is
+// never gated, so liveness probes don't need the token.
 func checkAuth(r *http.Request) bool {
-	if apiToken == "" || !strings.HasPrefix(r.URL.Path, "/config/") {
+	if !strings.HasPrefix(r.URL.Path, "/config/") {
 		return true
 	}
 	const prefix = "Bearer "
@@ -131,6 +132,9 @@ func main() {
 
 	storageDir = envOr("CONFIG_SERVER_STORAGE_DIR", filepath.Join(".", "storage"))
 	apiToken = os.Getenv("API_TOKEN")
+	if apiToken == "" {
+		log.Fatal("API_TOKEN is required and was not set")
+	}
 	port := envOr("PORT", "8090")
 
 	if err := os.MkdirAll(storageDir, 0o755); err != nil {

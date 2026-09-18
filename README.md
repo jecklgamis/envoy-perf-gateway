@@ -36,35 +36,27 @@ split exists.
 
 ## Quickstart (HTTP source)
 
+`config_server` always requires `API_TOKEN` - it refuses to start without
+one, there's no unauthenticated mode. `config_server/Makefile`'s `run`/`up`
+default it to `default` for local dev convenience if you don't export
+anything - fine on localhost, but export a real value for anything beyond
+that:
+
 ```bash
+export API_TOKEN=some-long-random-value   # or skip this and use "default" locally
+
 make -C gatewayctl install
 make all                       # build image
 make -C config_server up       # build + run config_server container, :8090
+
+# the gateway's fetcher needs the same token to download, via CONFIG_API_TOKEN
+export CONFIG_API_TOKEN=$API_TOKEN        # or "default" to match the skipped case above
 make run                       # run gateway container, polling it over HTTP
-
-gatewayctl push-http --server-url http://localhost:8090
-curl http://localhost:8080/
-```
-
-### Authenticating the config server
-
-Set `API_TOKEN` before starting `config_server` to require it on every
-`/config/*` request (`/healthz` stays open for liveness probes):
-
-```bash
-export API_TOKEN=some-long-random-value
-make -C config_server up
 
 gatewayctl push-http --server-url http://localhost:8090 --api-token $API_TOKEN
 # or: export CONFIG_SERVER_API_TOKEN=$API_TOKEN and drop --api-token
-```
-
-The gateway container's fetcher needs the same token to download, via
-`CONFIG_API_TOKEN`:
-
-```bash
-export CONFIG_API_TOKEN=$API_TOKEN
-make run   # picks up CONFIG_API_TOKEN from the shell env
+# or: gatewayctl config set http.api-token $API_TOKEN (persists across sessions)
+curl http://localhost:8080/
 ```
 
 ## Quickstart (S3 source)
