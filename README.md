@@ -7,7 +7,105 @@ Envoy as a front door for perf and chaos testing. Add and remove backends
 with a CLI, toggle fault injection at runtime, no restart, no full xDS
 control plane.
 
-## Install
+## Quickstart
+
+Nothing to build - pulls the published Docker images and a pre-built
+`gatewayctl` binary from the
+[releases page](https://github.com/jecklgamis/envoy-perf-gateway/releases).
+
+**1. Download `gatewayctl`** (pick your platform - check the releases page
+for the current tag; GitHub's `releases/latest` link only resolves once a
+non-prerelease version is published):
+
+```bash
+curl -L -o gatewayctl https://github.com/jecklgamis/envoy-perf-gateway/releases/download/v1.0.0-alpha.1/gatewayctl-darwin-arm64
+chmod +x gatewayctl
+```
+
+Other platforms: swap the suffix for `gatewayctl-darwin-amd64`,
+`gatewayctl-linux-amd64`, or `gatewayctl-linux-arm64`.
+
+`:latest` tracks the most recent *tagged release* (published by
+[release.yaml](.github/workflows/release.yaml) on a `v*` tag) - not the
+main branch. If you want main's bleeding edge instead, both images also
+publish a `:main` tag on every push, via
+[build-gateway.yaml](.github/workflows/build-gateway.yaml)/
+[build-config-server.yaml](.github/workflows/build-config-server.yaml).
+
+**2. Run the gateway by itself, in its own terminal** - it ships with a
+working baked-in default (a `default_app` echo backend), so this alone is
+enough to see Envoy actually serving traffic, no config_server or backend
+needed yet. Foreground on purpose, so you see its logs directly - open a
+new terminal for each step from here on rather than backgrounding these:
+
+```bash
+docker pull jecklgamis/envoy-perf-gateway:latest
+docker run --name envoy-perf-gateway -p 8080:8080 -p 9901:9901 jecklgamis/envoy-perf-gateway:latest
+```
+
+In another terminal:
+
+```bash
+curl http://localhost:8080/
+```
+
+**3. In a third terminal, add config_server:**
+
+```bash
+docker pull jecklgamis/envoy-perf-gateway-config-server:latest
+docker run --name envoy-perf-gateway-config-server -p 8090:8090 \
+  -e API_TOKEN=default \
+  jecklgamis/envoy-perf-gateway-config-server:latest
+```
+
+**4. Back in your second terminal, point the gateway at it and add a real
+backend** - this is where `gatewayctl` earns its keep, dynamically wiring
+in a backend without restarting anything:
+
+```bash
+docker rm -f envoy-perf-gateway
+```
+
+Restart it (new terminal again, since this is foreground too):
+
+```bash
+docker run --name envoy-perf-gateway -p 8080:8080 -p 9901:9901 \
+  -e CONFIG_SOURCE_KIND=http \
+  -e CONFIG_SOURCE_URL=http://host.docker.internal:8090 \
+  -e CONFIG_API_TOKEN=default \
+  jecklgamis/envoy-perf-gateway:latest
+```
+
+And back in another terminal:
+
+```bash
+./gatewayctl add-backend --name httpbin --host httpbin.org --port 443 --tls --route-prefix /httpbin/
+./gatewayctl push-http --server-url http://localhost:8090 --api-token default
+
+curl http://localhost:8080/httpbin/get
+```
+
+**5. Try fault injection against it** - isolated per backend, so this only
+affects `httpbin` traffic, nothing else:
+
+```bash
+./gatewayctl fault abort --target httpbin --percent 100 --status 503
+curl http://localhost:8080/httpbin/get     # now 503
+curl http://localhost:8080/                # unaffected - still default_app
+
+./gatewayctl fault reset --target httpbin
+curl http://localhost:8080/httpbin/get     # back to normal
+```
+
+`API_TOKEN=default` is fine for a local first look; see
+[Authenticating config_server](#authenticating-config_server) below before
+using this anywhere less trusted than localhost.
+
+Once you're past this and want to build from source, add backends
+end-to-end, use S3 instead of HTTP, or dig deeper into fault injection,
+see [Building from source](#building-from-source) and the sections below.
+
+## Building from source
 
 ```bash
 make -C gatewayctl install   # go install - puts gatewayctl on your $PATH
@@ -32,13 +130,16 @@ ls gatewayctl/dist/          # gatewayctl-{darwin,linux}-{arm64,amd64}
 ```
 
 Each is a standalone binary - no install step needed, just copy it
-somewhere on `$PATH` and run it.
+somewhere on `$PATH` and run it. (These are also what the release workflow
+publishes - see the Quickstart above if you just want to download one.)
 
 See [docs/architecture.md](docs/architecture.md) for how config flows from
 `gatewayctl` through to a running Envoy, and why the HTTP/S3 distribution
 split exists.
 
-## Quickstart (HTTP source)
+### Running from source (HTTP source)
+
+#### Authenticating config_server
 
 `config_server` always requires `API_TOKEN` - it refuses to start without
 one, there's no unauthenticated mode. `config_server/Makefile`'s `run`/`up`
@@ -63,7 +164,7 @@ gatewayctl push-http --server-url http://localhost:8090 --api-token $API_TOKEN
 curl http://localhost:8080/
 ```
 
-## Quickstart (S3 source)
+### Running from source (S3 source)
 
 ```bash
 make -C gatewayctl install
