@@ -65,7 +65,8 @@ var addBackendCmd = &cobra.Command{
 			msg += fmt.Sprintf(" (routed via %s)", strings.Join(routedVia, ", "))
 		}
 		fmt.Println(msg)
-		return nil
+
+		return autoPushIfConfigured()
 	},
 }
 

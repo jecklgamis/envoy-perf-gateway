@@ -73,3 +73,26 @@ func regenerate() (config.Values, error) {
 	fmt.Printf("Regenerated %s/cds.yaml and lds.yaml\n", renderedDir)
 	return v, nil
 }
+
+// autoPushIfConfigured pushes the already-rendered cds.yaml/lds.yaml when
+// CONFIG_SOURCE_KIND is set - the same env var the fetcher (running inside
+// the container) uses to decide where to read config from. This lets
+// add-backend/remove-backend double as "and distribute it" without a
+// separate push-http/push-s3 call, while staying a no-op (today's
+// behavior, unchanged) when CONFIG_SOURCE_KIND isn't set.
+func autoPushIfConfigured() error {
+	switch kind := os.Getenv("CONFIG_SOURCE_KIND"); kind {
+	case "":
+		return nil
+	case "http":
+		return pushHTTPFiles(envOr("CONFIG_SERVER_URL", "http://localhost:8090"), os.Getenv("CONFIG_SERVER_API_TOKEN"))
+	case "s3":
+		bucket := os.Getenv("CONFIG_S3_BUCKET")
+		if bucket == "" {
+			return fmt.Errorf("CONFIG_SOURCE_KIND=s3 requires CONFIG_S3_BUCKET to also be set")
+		}
+		return pushS3Files(bucket, os.Getenv("CONFIG_S3_PREFIX"))
+	default:
+		return fmt.Errorf("unsupported CONFIG_SOURCE_KIND: %s (want \"http\" or \"s3\")", kind)
+	}
+}

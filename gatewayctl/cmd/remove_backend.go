@@ -41,7 +41,8 @@ var removeBackendCmd = &cobra.Command{
 			return err
 		}
 		fmt.Printf("Removed backend '%s'\n", rbName)
-		return nil
+
+		return autoPushIfConfigured()
 	},
 }
 

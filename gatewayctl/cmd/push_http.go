@@ -30,17 +30,24 @@ run the CLI. Regenerates first.`,
 		if _, err := regenerate(); err != nil {
 			return err
 		}
-		serverURL := strings.TrimRight(phServerURL, "/")
-		for _, filename := range []string{"cds.yaml", "lds.yaml"} {
-			localPath := filepath.Join(renderedDir, filename)
-			url := fmt.Sprintf("%s/config/%s", serverURL, filename)
-			if err := uploadFile(url, localPath, phAPIToken); err != nil {
-				return fmt.Errorf("uploading %s: %w", localPath, err)
-			}
-			fmt.Printf("Uploaded %s -> %s\n", localPath, url)
-		}
-		return nil
+		return pushHTTPFiles(phServerURL, phAPIToken)
 	},
+}
+
+// pushHTTPFiles uploads the already-rendered cds.yaml/lds.yaml. Callers
+// that need a fresh render first (the push-http command, invoked
+// standalone) call regenerate() themselves before this.
+func pushHTTPFiles(serverURL, apiToken string) error {
+	serverURL = strings.TrimRight(serverURL, "/")
+	for _, filename := range []string{"cds.yaml", "lds.yaml"} {
+		localPath := filepath.Join(renderedDir, filename)
+		url := fmt.Sprintf("%s/config/%s", serverURL, filename)
+		if err := uploadFile(url, localPath, apiToken); err != nil {
+			return fmt.Errorf("uploading %s: %w", localPath, err)
+		}
+		fmt.Printf("Uploaded %s -> %s\n", localPath, url)
+	}
+	return nil
 }
 
 func uploadFile(url, localPath, apiToken string) error {

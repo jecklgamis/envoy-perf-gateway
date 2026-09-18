@@ -30,35 +30,41 @@ fetcher to pick up (CONFIG_SOURCE_KIND=s3). Regenerates first.`,
 		if _, err := regenerate(); err != nil {
 			return err
 		}
-
-		ctx := context.Background()
-		cfg, err := awsconfig.LoadDefaultConfig(ctx)
-		if err != nil {
-			return fmt.Errorf("loading AWS config: %w", err)
-		}
-		client := s3.NewFromConfig(cfg)
-		prefix := strings.TrimLeft(psPrefix, "/")
-
-		for _, filename := range []string{"cds.yaml", "lds.yaml"} {
-			localPath := filepath.Join(renderedDir, filename)
-			f, err := os.Open(localPath)
-			if err != nil {
-				return err
-			}
-			key := prefix + filename
-			_, err = client.PutObject(ctx, &s3.PutObjectInput{
-				Bucket: aws.String(psBucket),
-				Key:    aws.String(key),
-				Body:   f,
-			})
-			f.Close()
-			if err != nil {
-				return fmt.Errorf("uploading %s: %w", localPath, err)
-			}
-			fmt.Printf("Uploaded %s -> s3://%s/%s\n", localPath, psBucket, key)
-		}
-		return nil
+		return pushS3Files(psBucket, psPrefix)
 	},
+}
+
+// pushS3Files uploads the already-rendered cds.yaml/lds.yaml. Callers that
+// need a fresh render first (the push-s3 command, invoked standalone) call
+// regenerate() themselves before this.
+func pushS3Files(bucket, prefix string) error {
+	ctx := context.Background()
+	cfg, err := awsconfig.LoadDefaultConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("loading AWS config: %w", err)
+	}
+	client := s3.NewFromConfig(cfg)
+	prefix = strings.TrimLeft(prefix, "/")
+
+	for _, filename := range []string{"cds.yaml", "lds.yaml"} {
+		localPath := filepath.Join(renderedDir, filename)
+		f, err := os.Open(localPath)
+		if err != nil {
+			return err
+		}
+		key := prefix + filename
+		_, err = client.PutObject(ctx, &s3.PutObjectInput{
+			Bucket: aws.String(bucket),
+			Key:    aws.String(key),
+			Body:   f,
+		})
+		f.Close()
+		if err != nil {
+			return fmt.Errorf("uploading %s: %w", localPath, err)
+		}
+		fmt.Printf("Uploaded %s -> s3://%s/%s\n", localPath, bucket, key)
+	}
+	return nil
 }
 
 func init() {
