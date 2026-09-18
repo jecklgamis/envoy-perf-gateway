@@ -13,26 +13,7 @@ Nothing to build - pulls the published Docker images and a pre-built
 `gatewayctl` binary from the
 [releases page](https://github.com/jecklgamis/envoy-perf-gateway/releases).
 
-**1. Download `gatewayctl`** (pick your platform - check the releases page
-for the current tag; GitHub's `releases/latest` link only resolves once a
-non-prerelease version is published):
-
-```bash
-curl -L -o gatewayctl https://github.com/jecklgamis/envoy-perf-gateway/releases/download/v1.0.0-alpha.1/gatewayctl-darwin-arm64
-chmod +x gatewayctl
-```
-
-Other platforms: swap the suffix for `gatewayctl-darwin-amd64`,
-`gatewayctl-linux-amd64`, or `gatewayctl-linux-arm64`.
-
-`:latest` tracks the most recent *tagged release* (published by
-[release.yaml](.github/workflows/release.yaml) on a `v*` tag) - not the
-main branch. If you want main's bleeding edge instead, both images also
-publish a `:main` tag on every push, via
-[build-gateway.yaml](.github/workflows/build-gateway.yaml)/
-[build-config-server.yaml](.github/workflows/build-config-server.yaml).
-
-**2. Run the gateway, in its own terminal, already pointed at
+**1. Run the gateway, in its own terminal, already pointed at
 config_server** - it's fine that config_server isn't up yet: the gateway
 ships with a working baked-in default (a `default_app` echo backend), so
 it serves traffic immediately regardless, while its fetcher quietly
@@ -49,7 +30,7 @@ docker run --name envoy-perf-gateway -p 8080:8080 -p 9901:9901 \
   jecklgamis/envoy-perf-gateway:latest
 ```
 
-**3. In another terminal, bring up config_server:**
+**2. In another terminal, bring up config_server:**
 
 ```bash
 docker pull jecklgamis/envoy-perf-gateway-config-server:latest
@@ -58,11 +39,29 @@ docker run --name envoy-perf-gateway-config-server -p 8090:8090 \
   jecklgamis/envoy-perf-gateway-config-server:latest
 ```
 
-**4. In a third terminal, point `gatewayctl` at config_server** - this
-saves the mode, URL, and token to `gatewayctl`'s settings file
-(`~/.config/gatewayctl/config.yaml` by default) so `add-backend`/
-`remove-backend` push automatically from here on, no separate
-`push-http` call each time:
+**3. In a third terminal, download `gatewayctl`** (pick your platform -
+check the releases page for the current tag; GitHub's `releases/latest`
+link only resolves once a non-prerelease version is published):
+
+```bash
+curl -L -o gatewayctl https://github.com/jecklgamis/envoy-perf-gateway/releases/download/v1.0.0-alpha.1/gatewayctl-darwin-arm64
+chmod +x gatewayctl
+```
+
+Other platforms: swap the suffix for `gatewayctl-darwin-amd64`,
+`gatewayctl-linux-amd64`, or `gatewayctl-linux-arm64`.
+
+`:latest` tracks the most recent *tagged release* (published by
+[release.yaml](.github/workflows/release.yaml) on a `v*` tag) - not the
+main branch. If you want main's bleeding edge instead, both images also
+publish a `:main` tag on every push, via
+[build-gateway.yaml](.github/workflows/build-gateway.yaml)/
+[build-config-server.yaml](.github/workflows/build-config-server.yaml).
+
+**4. Point `gatewayctl` at config_server** - this saves the mode, URL, and
+token to `gatewayctl`'s settings file (`~/.config/gatewayctl/config.yaml`
+by default) so `add-backend`/`remove-backend` push automatically from here
+on, no separate `push-http` call each time:
 
 ```bash
 ./gatewayctl config set mode http
