@@ -7,7 +7,7 @@ on:
     paths:
       - 'app.js'
       - 'config/**'
-      - 'envoyctl/**'
+      - 'gatewayctl/**'
       - 'fetcher/**'
       - 'templates/**'
       - 'values.yaml'
@@ -24,7 +24,7 @@ on:
     paths:
       - 'app.js'
       - 'config/**'
-      - 'envoyctl/**'
+      - 'gatewayctl/**'
       - 'fetcher/**'
       - 'templates/**'
       - 'values.yaml'
@@ -50,7 +50,7 @@ jobs:
       - name: Render dynamic config (rendered/ is gitignored)
         run: |
           pip install -e .
-          envoyctl render
+          gatewayctl render
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v6

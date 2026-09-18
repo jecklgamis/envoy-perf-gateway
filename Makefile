@@ -17,7 +17,7 @@ run:
 		-e CONFIG_SOURCE_URL=http://host.docker.internal:8090 \
 		-e CONFIG_API_TOKEN \
 		$(IMAGE_NAME):$(IMAGE_TAG)
-# S3 source mode: run `envoyctl push-s3 --bucket ...` after add-backend
+# S3 source mode: run `gatewayctl push-s3 --bucket ...` after add-backend
 # instead of relying on the local HTTP server. Needs AWS credentials in the
 # container's environment (mount ~/.aws, or pass -e AWS_ACCESS_KEY_ID etc).
 run-s3:

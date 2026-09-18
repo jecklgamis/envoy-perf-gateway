@@ -6,47 +6,59 @@ import click
 import requests
 import yaml
 
-from .atomic_write import atomic_write
-from .render import load_values, render
+from gatewayctl.atomic_write import atomic_write
+from gatewayctl.render import load_values, render
 
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-VALUES_PATH = os.path.join(ROOT_DIR, "values.yaml")
+ROOT_DIR = os.getcwd()
+DEFAULT_VALUES_PATH = os.path.join(ROOT_DIR, "values.yaml")
 # Rendered files are the distribution source of truth - NOT bind-mounted
 # into the container. They're picked up by config_fetcher.py running inside
 # the container, either over HTTP (config_server/config_server.py serves
-# this directory) or from S3 (`envoyctl push-s3` uploads it there). The
+# this directory) or from S3 (`gatewayctl push-s3` uploads it there). The
 # fetcher writes into /etc/envoy/dynamic *inside* the container, which is
 # what actually triggers Envoy's inotify-based reload - a host-side
 # bind-mount write does not, on Docker Desktop for Mac.
-RENDERED_DIR = os.path.join(ROOT_DIR, "rendered")
+DEFAULT_RENDERED_DIR = os.path.join(ROOT_DIR, "rendered")
 
 
-def save_values(values):
-    with open(VALUES_PATH, "w") as f:
+def save_values(values_path, values):
+    with open(values_path, "w") as f:
         yaml.safe_dump(values, f, sort_keys=False)
 
 
-def regenerate():
-    values = load_values(VALUES_PATH)
-    os.makedirs(RENDERED_DIR, exist_ok=True)
+def regenerate(values_path, rendered_dir):
+    values = load_values(values_path)
+    os.makedirs(rendered_dir, exist_ok=True)
     cds = render("cds.yaml.j2", values)
     lds = render("lds.yaml.j2", values)
-    atomic_write(os.path.join(RENDERED_DIR, "cds.yaml"), cds)
-    atomic_write(os.path.join(RENDERED_DIR, "lds.yaml"), lds)
-    click.echo("Regenerated rendered/cds.yaml and lds.yaml")
+    atomic_write(os.path.join(rendered_dir, "cds.yaml"), cds)
+    atomic_write(os.path.join(rendered_dir, "lds.yaml"), lds)
+    click.echo(f"Regenerated {rendered_dir}/cds.yaml and lds.yaml")
 
 
 @click.group()
-def cli():
+@click.option("--values", "values_path", default=DEFAULT_VALUES_PATH,
+              envvar="GATEWAYCTL_VALUES", show_default=True,
+              type=click.Path(dir_okay=False),
+              help="Path to values.yaml. Defaults to values.yaml in the "
+                   "current working directory.")
+@click.option("--rendered-dir", default=DEFAULT_RENDERED_DIR,
+              envvar="GATEWAYCTL_RENDERED_DIR", show_default=True,
+              type=click.Path(file_okay=False),
+              help="Directory to write rendered cds.yaml/lds.yaml into.")
+@click.pass_context
+def cli(ctx, values_path, rendered_dir):
     """envoy-perf-gateway control CLI"""
+    ctx.obj = {"values_path": values_path, "rendered_dir": rendered_dir}
 
 
 @cli.command("render")
-def render_cmd():
-    """Render rendered/cds.yaml and lds.yaml from values.yaml without
-    changing any backend. `rendered/` is gitignored (generated), so this is
+@click.pass_obj
+def render_cmd(obj):
+    """Render cds.yaml and lds.yaml from values.yaml without changing any
+    backend. The rendered directory is gitignored (generated), so this is
     the step CI runs before `docker build` on a fresh checkout."""
-    regenerate()
+    regenerate(obj["values_path"], obj["rendered_dir"])
 
 
 @cli.command("add-backend")
@@ -59,9 +71,10 @@ def render_cmd():
                    "Omit to only add the cluster without a route.")
 @click.option("--connect-timeout", default="5s")
 @click.option("--timeout", default="15s")
-def add_backend(name, host, port, tls, route_prefix, connect_timeout, timeout):
+@click.pass_obj
+def add_backend(obj, name, host, port, tls, route_prefix, connect_timeout, timeout):
     """Add (or replace) a backend and hot-reload Envoy - no restart."""
-    values = load_values(VALUES_PATH)
+    values = load_values(obj["values_path"])
     backends = values.setdefault("backends", [])
     backends[:] = [b for b in backends if b["name"] != name]
     backends.append({
@@ -73,31 +86,33 @@ def add_backend(name, host, port, tls, route_prefix, connect_timeout, timeout):
         "connect_timeout": connect_timeout,
         "timeout": timeout,
     })
-    save_values(values)
-    regenerate()
+    save_values(obj["values_path"], values)
+    regenerate(obj["values_path"], obj["rendered_dir"])
     click.echo(f"Added backend '{name}' -> {host}:{port}"
                + (f" (routed from {route_prefix})" if route_prefix else ""))
 
 
 @cli.command("remove-backend")
 @click.option("--name", required=True)
-def remove_backend(name):
+@click.pass_obj
+def remove_backend(obj, name):
     """Remove a backend and hot-reload Envoy."""
-    values = load_values(VALUES_PATH)
+    values = load_values(obj["values_path"])
     backends = values.setdefault("backends", [])
     before = len(backends)
     backends[:] = [b for b in backends if b["name"] != name]
     if len(backends) == before:
         click.echo(f"No backend named '{name}' found", err=True)
         sys.exit(1)
-    save_values(values)
-    regenerate()
+    save_values(obj["values_path"], values)
+    regenerate(obj["values_path"], obj["rendered_dir"])
     click.echo(f"Removed backend '{name}'")
 
 
 @cli.command("list-backends")
-def list_backends():
-    values = load_values(VALUES_PATH)
+@click.pass_obj
+def list_backends(obj):
+    values = load_values(obj["values_path"])
     backends = values.get("backends", [])
     if not backends:
         click.echo("No backends configured")
@@ -109,21 +124,23 @@ def list_backends():
 
 
 @cli.command("push-http")
-@click.option("--server-url", required=True, envvar="CONFIG_SERVER_URL",
-              help="Base URL of a running config_server, e.g. http://localhost:8090")
+@click.option("--server-url", default="http://localhost:8090", envvar="CONFIG_SERVER_URL",
+              show_default=True,
+              help="Base URL of a running config_server.")
 @click.option("--api-token", default=None, envvar="CONFIG_SERVER_API_TOKEN",
               help="Sent as 'Authorization: Bearer <token>'. Required if the "
                    "server was started with API_TOKEN set.")
-def push_http(server_url, api_token):
-    """Upload rendered/cds.yaml and lds.yaml to a running config_server
-    over HTTP. Use this whenever the server isn't colocated with envoyctl on
+@click.pass_obj
+def push_http(obj, server_url, api_token):
+    """Upload rendered cds.yaml and lds.yaml to a running config_server
+    over HTTP. Use this whenever the server isn't colocated with gatewayctl on
     the same filesystem - e.g. it's deployed separately from wherever you
     run the CLI. Regenerates first."""
-    regenerate()
+    regenerate(obj["values_path"], obj["rendered_dir"])
     server_url = server_url.rstrip("/")
     headers = {"Authorization": f"Bearer {api_token}"} if api_token else {}
     for filename in ("cds.yaml", "lds.yaml"):
-        local_path = os.path.join(RENDERED_DIR, filename)
+        local_path = os.path.join(obj["rendered_dir"], filename)
         with open(local_path, "rb") as f:
             r = requests.post(f"{server_url}/config/{filename}",
                                files={"file": (filename, f)}, headers=headers, timeout=10)
@@ -135,15 +152,16 @@ def push_http(server_url, api_token):
 @click.option("--bucket", required=True, envvar="CONFIG_S3_BUCKET")
 @click.option("--prefix", default="", envvar="CONFIG_S3_PREFIX",
               help="Key prefix, e.g. 'envoy-perf-gateway/'")
-def push_s3(bucket, prefix):
-    """Upload rendered/cds.yaml and lds.yaml to S3 for the in-container
+@click.pass_obj
+def push_s3(obj, bucket, prefix):
+    """Upload rendered cds.yaml and lds.yaml to S3 for the in-container
     fetcher to pick up (CONFIG_SOURCE_KIND=s3). Regenerates first."""
     import boto3
-    regenerate()
+    regenerate(obj["values_path"], obj["rendered_dir"])
     client = boto3.client("s3")
     prefix = prefix.lstrip("/")
     for filename in ("cds.yaml", "lds.yaml"):
-        local_path = os.path.join(RENDERED_DIR, filename)
+        local_path = os.path.join(obj["rendered_dir"], filename)
         key = f"{prefix}{filename}" if prefix else filename
         client.upload_file(local_path, bucket, key)
         click.echo(f"Uploaded {local_path} -> s3://{bucket}/{key}")

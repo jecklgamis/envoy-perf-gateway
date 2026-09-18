@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Config distribution server: accepts rendered config files over HTTP
-(`envoyctl push-http`) and serves the latest version back out
+(`gatewayctl push-http`) and serves the latest version back out
 (`config_fetcher.py` polling inside the Envoy container).
 
-This decouples envoyctl from the server's filesystem - the server keeps its
+This decouples gatewayctl from the server's filesystem - the server keeps its
 own storage and can run anywhere reachable over HTTP, not just colocated on
-the same disk as envoyctl."""
+the same disk as gatewayctl."""
 import hmac
 import logging
 import os

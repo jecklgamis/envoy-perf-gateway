@@ -39,7 +39,7 @@ def sha256(content):
 class HttpSource:
     """Fetches rendered config files by HTTP GET from a base URL, e.g.
     a small Flask server that serves the `rendered/` directory produced by
-    `envoyctl regenerate()`."""
+    `gatewayctl regenerate()`."""
 
     def __init__(self):
         import requests
