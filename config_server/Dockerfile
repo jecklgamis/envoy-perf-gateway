@@ -10,4 +10,4 @@ ENV CONFIG_SERVER_STORAGE_DIR=/data
 RUN mkdir -p /data
 
 EXPOSE 8090
-CMD ["python3", "config_server.py"]
+CMD ["gunicorn", "--workers", "2", "--bind", "0.0.0.0:8090", "config_server:app"]

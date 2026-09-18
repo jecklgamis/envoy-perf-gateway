@@ -1,6 +1,6 @@
 FROM envoyproxy/envoy:v1.39-latest
 RUN apt update -y && apt install -y curl dumb-init supervisor python3 python3-pip && \
-    pip3 install --no-cache-dir requests boto3 flask && \
+    pip3 install --no-cache-dir requests boto3 flask gunicorn && \
     rm -rf /var/lib/apt/lists/*
 
 COPY supervisor.ini /etc/supervisor.d/

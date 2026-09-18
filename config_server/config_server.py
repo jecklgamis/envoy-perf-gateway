@@ -7,11 +7,19 @@ This decouples envoyctl from the server's filesystem - the server keeps its
 own storage and can run anywhere reachable over HTTP, not just colocated on
 the same disk as envoyctl."""
 import hmac
+import logging
 import os
+import sys
 import tempfile
 
 from flask import Flask, abort, request, send_from_directory
 from werkzeug.utils import secure_filename
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] {config_server.py} %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
 
 STORAGE_DIR = os.environ.get(
     "CONFIG_SERVER_STORAGE_DIR",
@@ -55,8 +63,12 @@ def atomic_write(path, data):
 @app.route("/config/<path:filename>", methods=["GET"])
 def get_config(filename):
     filename = secure_filename(filename)
-    if not os.path.isfile(os.path.join(STORAGE_DIR, filename)):
+    local_path = os.path.join(STORAGE_DIR, filename)
+    if not os.path.isfile(local_path):
+        logging.warning(f"Download failed, {filename} not found in {STORAGE_DIR}")
         abort(404)
+    size = os.path.getsize(local_path)
+    logging.info(f"Downloaded {filename} successfully ({size} bytes) by {request.remote_addr}")
     return send_from_directory(STORAGE_DIR, filename)
 
 

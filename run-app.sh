@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-exec python3 /app.py 5050
+exec gunicorn --chdir / --workers 1 --bind 0.0.0.0:5050 app:app

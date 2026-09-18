@@ -9,7 +9,8 @@ image:
 # Set API_TOKEN in your shell to require it on every /config/* request.
 run:
 	mkdir -p storage
-	docker run -d --name $(IMAGE_NAME) \
+	-docker rm -f $(IMAGE_NAME) 2>/dev/null
+	docker run --name $(IMAGE_NAME) \
 		-p 8090:8090 \
 		-v $(PWD)/storage:/data \
 		-e API_TOKEN \

@@ -91,12 +91,13 @@ def fetch_event_loop(source, target_dir, files, poll_interval):
                 continue
             digest = sha256(content)
             if last_hash.get(filename) == digest:
+                logging.info(f"Fetched {filename} successfully ({len(content)} bytes, unchanged)")
                 continue
             target_path = os.path.join(target_dir, filename)
             try:
                 atomic_write_bytes(target_path, content)
                 last_hash[filename] = digest
-                logging.info(f"Updated {target_path} ({len(content)} bytes)")
+                logging.info(f"Fetched {filename} successfully, updated {target_path} ({len(content)} bytes)")
             except Exception as e:
                 logging.warning(f"Failed to write {target_path}: {e}")
         time.sleep(poll_interval)

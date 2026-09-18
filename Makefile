@@ -10,7 +10,8 @@ image:
 # config_server up, or config-server below). host.docker.internal lets the
 # container reach the host. Set CONFIG_API_TOKEN if the server requires one.
 run:
-	docker run -d --name $(IMAGE_NAME) \
+	-docker rm -f $(IMAGE_NAME) 2>/dev/null
+	docker run --name $(IMAGE_NAME) \
 		-p 8080:8080 -p 8443:8443 -p 9901:9901 \
 		-e CONFIG_SOURCE_KIND=http \
 		-e CONFIG_SOURCE_URL=http://host.docker.internal:8090 \
