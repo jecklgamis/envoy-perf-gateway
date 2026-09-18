@@ -32,24 +32,24 @@ publish a `:main` tag on every push, via
 [build-gateway.yaml](.github/workflows/build-gateway.yaml)/
 [build-config-server.yaml](.github/workflows/build-config-server.yaml).
 
-**2. Run the gateway by itself, in its own terminal** - it ships with a
-working baked-in default (a `default_app` echo backend), so this alone is
-enough to see Envoy actually serving traffic, no config_server or backend
-needed yet. Foreground on purpose, so you see its logs directly - open a
-new terminal for each step from here on rather than backgrounding these:
+**2. Run the gateway, in its own terminal, already pointed at
+config_server** - it's fine that config_server isn't up yet: the gateway
+ships with a working baked-in default (a `default_app` echo backend), so
+it serves traffic immediately regardless, while its fetcher quietly
+retries in the background until config_server appears. Foreground on
+purpose, so you see its logs directly - open a new terminal for each step
+from here on rather than backgrounding these:
 
 ```bash
 docker pull jecklgamis/envoy-perf-gateway:latest
-docker run --name envoy-perf-gateway -p 8080:8080 -p 9901:9901 jecklgamis/envoy-perf-gateway:latest
+docker run --name envoy-perf-gateway -p 8080:8080 -p 9901:9901 \
+  -e CONFIG_SOURCE_KIND=http \
+  -e CONFIG_SOURCE_URL=http://host.docker.internal:8090 \
+  -e CONFIG_API_TOKEN=default \
+  jecklgamis/envoy-perf-gateway:latest
 ```
 
-In another terminal:
-
-```bash
-curl http://localhost:8080/
-```
-
-**3. In a third terminal, add config_server:**
+**3. In another terminal, bring up config_server:**
 
 ```bash
 docker pull jecklgamis/envoy-perf-gateway-config-server:latest
@@ -58,34 +58,29 @@ docker run --name envoy-perf-gateway-config-server -p 8090:8090 \
   jecklgamis/envoy-perf-gateway-config-server:latest
 ```
 
-**4. Back in your second terminal, point the gateway at it and add a real
-backend** - this is where `gatewayctl` earns its keep, dynamically wiring
-in a backend without restarting anything:
+**4. In a third terminal, point `gatewayctl` at config_server** - this
+saves the mode, URL, and token to `gatewayctl`'s settings file
+(`~/.config/gatewayctl/config.yaml` by default) so `add-backend`/
+`remove-backend` push automatically from here on, no separate
+`push-http` call each time:
 
 ```bash
-docker rm -f envoy-perf-gateway
+./gatewayctl config set mode http
+./gatewayctl config set http.server-url http://localhost:8090
+./gatewayctl config set http.api-token default
 ```
 
-Restart it (new terminal again, since this is foreground too):
-
-```bash
-docker run --name envoy-perf-gateway -p 8080:8080 -p 9901:9901 \
-  -e CONFIG_SOURCE_KIND=http \
-  -e CONFIG_SOURCE_URL=http://host.docker.internal:8090 \
-  -e CONFIG_API_TOKEN=default \
-  jecklgamis/envoy-perf-gateway:latest
-```
-
-And back in another terminal:
+**5. Add a real backend** - no restart of the gateway needed, it's already
+polling config_server, this is where `gatewayctl` earns its keep,
+dynamically wiring in a backend:
 
 ```bash
 ./gatewayctl add-backend --name httpbin --host httpbin.org --port 443 --tls --route-prefix /httpbin/
-./gatewayctl push-http --server-url http://localhost:8090 --api-token default
 
 curl http://localhost:8080/httpbin/get
 ```
 
-**5. Try fault injection against it** - isolated per backend, so this only
+**6. Try fault injection against it** - isolated per backend, so this only
 affects `httpbin` traffic, nothing else:
 
 ```bash
