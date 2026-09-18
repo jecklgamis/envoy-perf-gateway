@@ -1,0 +1,8 @@
+server.crt
+server.key
+.venv/
+__pycache__/
+*.pyc
+rendered/
+config_server/storage/
+*.egg-info/

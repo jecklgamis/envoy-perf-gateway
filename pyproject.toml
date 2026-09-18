@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "envoy-perf-gateway"
+version = "0.1.0"
+description = "CLI for envoy-perf-gateway: add/remove test backends and toggle fault injection on a running Envoy gateway"
+requires-python = ">=3.9"
+dependencies = [
+    "click>=8.1",
+    "jinja2>=3.1",
+    "pyyaml>=6.0",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+s3 = ["boto3>=1.34"]
+
+[project.scripts]
+envoyctl = "envoyctl.cli:cli"
+
+[tool.setuptools.packages.find]
+include = ["envoyctl*"]

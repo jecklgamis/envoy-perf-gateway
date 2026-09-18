@@ -1,0 +1,119 @@
+resources:
+  - "@type": type.googleapis.com/envoy.config.listener.v3.Listener
+    name: https_listener
+    address:
+      socket_address:
+        address: 0.0.0.0
+        port_value: 8443
+    filter_chains:
+      - filters:
+          - name: envoy.filters.network.http_connection_manager
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+              stat_prefix: ingress_https
+              route_config:
+                name: local_route
+                virtual_hosts:
+                  - name: backend
+                    domains: [ "*" ]
+                    routes:
+{% for b in backends %}
+{% if b.route_prefix %}
+                      - match:
+                          prefix: "{{ b.route_prefix }}"
+                        route:
+                          cluster: {{ b.name }}
+                          prefix_rewrite: "/"
+                          timeout: {{ b.timeout }}
+{% endif %}
+{% endfor %}
+                      - match:
+                          prefix: "/"
+                        route:
+                          cluster: default_app
+                          timeout: 15s
+              http_filters:
+                - name: envoy.filters.http.fault
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.filters.http.fault.v3.HTTPFault
+                    abort:
+                      http_status: 503
+                      percentage:
+                        numerator: 0
+                        denominator: HUNDRED
+                    delay:
+                      fixed_delay: 2s
+                      percentage:
+                        numerator: 0
+                        denominator: HUNDRED
+                    abort_percent_runtime: "fault.http.abort.abort_percent"
+                    abort_http_status_runtime: "fault.http.abort.http_status"
+                    delay_percent_runtime: "fault.http.delay.delay_percent"
+                    delay_duration_runtime: "fault.http.delay.fixed_duration_ms"
+                - name: envoy.filters.http.router
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+        transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+              common_tls_context:
+                tls_certificates:
+                  - certificate_chain:
+                      filename: "/etc/server.crt"
+                    private_key:
+                      filename: "/etc/server.key"
+  - "@type": type.googleapis.com/envoy.config.listener.v3.Listener
+    name: http_listener
+    address:
+      socket_address:
+        address: 0.0.0.0
+        port_value: 8080
+    filter_chains:
+      - filters:
+          - name: envoy.filters.network.http_connection_manager
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+              stat_prefix: ingress_http
+              route_config:
+                name: local_route
+                virtual_hosts:
+                  - name: backend
+                    domains: [ "*" ]
+                    routes:
+{% for b in backends %}
+{% if b.route_prefix %}
+                      - match:
+                          prefix: "{{ b.route_prefix }}"
+                        route:
+                          cluster: {{ b.name }}
+                          prefix_rewrite: "/"
+                          timeout: {{ b.timeout }}
+{% endif %}
+{% endfor %}
+                      - match:
+                          prefix: "/"
+                        route:
+                          cluster: default_app
+                          timeout: 15s
+              http_filters:
+                - name: envoy.filters.http.fault
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.filters.http.fault.v3.HTTPFault
+                    abort:
+                      http_status: 503
+                      percentage:
+                        numerator: 0
+                        denominator: HUNDRED
+                    delay:
+                      fixed_delay: 2s
+                      percentage:
+                        numerator: 0
+                        denominator: HUNDRED
+                    abort_percent_runtime: "fault.http.abort.abort_percent"
+                    abort_http_status_runtime: "fault.http.abort.http_status"
+                    delay_percent_runtime: "fault.http.delay.delay_percent"
+                    delay_duration_runtime: "fault.http.delay.fixed_duration_ms"
+                - name: envoy.filters.http.router
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router

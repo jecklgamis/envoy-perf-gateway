@@ -1,0 +1,53 @@
+resources:
+  - "@type": type.googleapis.com/envoy.config.cluster.v3.Cluster
+    name: envoy_admin
+    connect_timeout: 0.25s
+    type: STATIC
+    load_assignment:
+      cluster_name: envoy_admin
+      endpoints:
+        - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: 127.0.0.1
+                    port_value: 9901
+  - "@type": type.googleapis.com/envoy.config.cluster.v3.Cluster
+    name: default_app
+    connect_timeout: 0.25s
+    type: LOGICAL_DNS
+    dns_lookup_family: V4_ONLY
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: default_app
+      endpoints:
+        - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: 127.0.0.1
+                    port_value: 5050
+{% for b in backends %}
+  - "@type": type.googleapis.com/envoy.config.cluster.v3.Cluster
+    name: {{ b.name }}
+    connect_timeout: {{ b.connect_timeout }}
+    type: LOGICAL_DNS
+    dns_lookup_family: V4_ONLY
+    lb_policy: ROUND_ROBIN
+    load_assignment:
+      cluster_name: {{ b.name }}
+      endpoints:
+        - lb_endpoints:
+            - endpoint:
+                address:
+                  socket_address:
+                    address: {{ b.host }}
+                    port_value: {{ b.port }}
+{% if b.tls %}
+    transport_socket:
+      name: envoy.transport_sockets.tls
+      typed_config:
+        "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+        sni: {{ b.host }}
+{% endif %}
+{% endfor %}
