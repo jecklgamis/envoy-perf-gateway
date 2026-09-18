@@ -2,8 +2,6 @@ name: Build Config Server
 on:
   push:
     branches: [ main ]
-    tags:
-      - v*
     paths:
       - 'config_server/**'
       - '.github/workflows/build-config-server.yaml'
