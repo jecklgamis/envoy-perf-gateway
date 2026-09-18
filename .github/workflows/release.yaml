@@ -72,6 +72,17 @@ jobs:
         run: |
           cd gatewayctl/dist
           shasum -a 256 * > checksums.txt
+      # Semver convention: a hyphen after the version core marks a
+      # pre-release (v1.0.0-alpha.1, v1.0.0-rc.1, ...); v1.0.0 itself has
+      # none, so it's a full release.
+      - name: Determine prerelease flag
+        id: prerelease
+        run: |
+          if [[ "${{ github.ref_name }}" == *-* ]]; then
+            echo "flag=--prerelease" >> "$GITHUB_OUTPUT"
+          else
+            echo "flag=" >> "$GITHUB_OUTPUT"
+          fi
       - name: Create GitHub release with binaries
         if: ${{ github.event.repository.name == 'envoy-perf-gateway' }}
         env:
@@ -80,4 +91,5 @@ jobs:
           gh release create "${{ github.ref_name }}" \
             gatewayctl/dist/* \
             --title "${{ github.ref_name }}" \
-            --generate-notes
+            --generate-notes \
+            ${{ steps.prerelease.outputs.flag }}
