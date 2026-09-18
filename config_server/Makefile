@@ -19,13 +19,11 @@ stop:
 	docker stop $(IMAGE_NAME) && docker rm $(IMAGE_NAME)
 logs:
 	docker logs -f $(IMAGE_NAME)
-venv:
-	python3 -m venv .venv
-	.venv/bin/pip install -r requirements.txt
-# Runs config_server.py directly on the host via Flask's dev server (auto
-# reload, verbose errors) instead of the containerized gunicorn path -
-# handy for iterating on config_server.py itself.
-dev: venv
-	.venv/bin/python3 config_server.py
+# Runs main.go directly on the host via `go run` instead of the
+# containerized path - handy for iterating on config_server itself.
+dev:
+	go run .
+build:
+	go build -o config_server .
 all: image
 up: all run

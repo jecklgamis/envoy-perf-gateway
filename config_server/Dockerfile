@@ -1,13 +1,16 @@
-FROM python:3.12-slim
+FROM golang:1.24-bookworm AS builder
+WORKDIR /build
+
+COPY go.mod main.go ./
+RUN go build -o /out/config_server .
+
+FROM debian:bookworm-slim
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-COPY config_server.py .
+COPY --from=builder /out/config_server .
 
 ENV CONFIG_SERVER_STORAGE_DIR=/data
 RUN mkdir -p /data
 
 EXPOSE 8090
-CMD ["gunicorn", "--workers", "2", "--bind", "0.0.0.0:8090", "config_server:app"]
+CMD ["./config_server"]

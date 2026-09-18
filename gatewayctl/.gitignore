@@ -1,6 +1,2 @@
-dist/
-build/
-*.egg-info/
-__pycache__/
-*.pyc
-.venv/
+/gatewayctl
+/dist/

@@ -5,7 +5,7 @@ on:
     tags:
       - v*
     paths:
-      - 'app.js'
+      - 'app/**'
       - 'config/**'
       - 'gatewayctl/**'
       - 'fetcher/**'
@@ -19,7 +19,7 @@ on:
     types: [ opened, reopened ]
     branches: [ main ]
     paths:
-      - 'app.js'
+      - 'app/**'
       - 'config/**'
       - 'gatewayctl/**'
       - 'fetcher/**'
@@ -35,14 +35,14 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v7
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          python-version: '3.12'
+          go-version: '1.24'
       - name: Render dynamic config (rendered/ is gitignored)
         run: |
-          pip install -e ./gatewayctl
-          gatewayctl render
+          cd gatewayctl && go build -o gatewayctl . && cd ..
+          ./gatewayctl/gatewayctl render
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v6

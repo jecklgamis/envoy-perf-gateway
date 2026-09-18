@@ -5,10 +5,10 @@ default:
 	@cat ./Makefile
 image:
 	docker build -t $(IMAGE_NAME):$(IMAGE_TAG) .
-# HTTP source mode: config_fetcher.py inside the container polls
-# config_server/config_server.py, which you must run first (make -C
-# config_server up). host.docker.internal lets the container reach the
-# host. Set CONFIG_API_TOKEN if the server requires one.
+# HTTP source mode: the config-fetcher binary inside the container polls
+# config_server, which you must run first (make -C config_server up).
+# host.docker.internal lets the container reach the host. Set
+# CONFIG_API_TOKEN if the server requires one.
 run:
 	-docker rm -f $(IMAGE_NAME) 2>/dev/null
 	docker run --name $(IMAGE_NAME) \
@@ -34,13 +34,14 @@ run-shell:
 	docker run -i -t $(IMAGE_NAME):$(IMAGE_TAG) /bin/bash
 exec-shell:
 	docker exec -it `docker ps | grep $(IMAGE_NAME) | awk '{print $$1}'` /bin/bash
-venv:
-	python3 -m venv .venv
-	.venv/bin/pip install -e "./gatewayctl[s3]"
-# gatewayctl is a self-contained sub-project (own pyproject.toml, own
-# Makefile, templates bundled as package data) - `pip install
-# gatewayctl/dist/*.whl` works standalone, not just editable from this repo.
+# gatewayctl is a self-contained Go module (own go.mod, own Makefile) -
+# a plain static binary, installable anywhere with no runtime dependency.
 build-gatewayctl:
 	$(MAKE) -C gatewayctl build
+# Cross-compiles gatewayctl for macOS (arm64/amd64) and Linux (amd64/arm64)
+# into gatewayctl/dist/ - hand these to teammates directly, no Go toolchain
+# needed on their end.
+build-gatewayctl-all:
+	$(MAKE) -C gatewayctl build-all
 all: image
 up: all run

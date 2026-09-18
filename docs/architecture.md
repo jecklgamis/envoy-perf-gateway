@@ -24,15 +24,15 @@ only points `dynamic_resources.cds_config` / `lds_config` at
 for Mac, host-side writes into a bind-mounted directory sync file content
 into the container but do not reliably propagate the underlying inotify
 event, so Envoy never notices the change even though the file is correct.
-Instead, `fetcher/config_fetcher.py` runs *inside* the container
-(via `supervisor.ini`) and polls a remote source for `cds.yaml`/`lds.yaml`,
-writing them into `/etc/envoy/dynamic` itself - a write native to the
-container's own filesystem, which does trigger Envoy's inotify watch.
-`gatewayctl` on the host only ever writes to `values.yaml` and the local
-`rendered/` directory; it never touches the container's filesystem
-directly. Both `gatewayctl` and the fetcher write atomically (temp file +
-`os.replace`, not delete-then-write) so a reader never observes a missing
-or partial file mid-swap.
+Instead, the `fetcher/` binary (compiled Go, statically linked) runs
+*inside* the container (via `supervisor.ini`) and polls a remote source for
+`cds.yaml`/`lds.yaml`, writing them into `/etc/envoy/dynamic` itself - a
+write native to the container's own filesystem, which does trigger Envoy's
+inotify watch. `gatewayctl` on the host only ever writes to `values.yaml`
+and the local `rendered/` directory; it never touches the container's
+filesystem directly. Both `gatewayctl` and the fetcher write atomically
+(temp file + rename, not delete-then-write) so a reader never observes a
+missing or partial file mid-swap.
 
 Two distribution mechanisms are supported, selected by the
 `CONFIG_SOURCE_KIND` env var on the container. Both are cloud-agnostic
@@ -40,14 +40,14 @@ Two distribution mechanisms are supported, selected by the
 after each change - `gatewayctl` never touches the container or the fetcher's
 source directly, only the distribution endpoint:
 
-- **`http`** - `config_fetcher.py` polls `config_server/config_server.py`,
-  a small Flask app with its own `storage/` directory (has its own
-  `Dockerfile`/`Makefile` - deployable as its own service). `gatewayctl
-  push-http` uploads `rendered/cds.yaml`/`lds.yaml` to it over HTTP POST.
-  The server doesn't need to be colocated with `gatewayctl` - anywhere
-  reachable over HTTP works, which is what makes this option cloud-agnostic
-  (no S3/GCS/Azure dependency at all). Optionally gated by `API_TOKEN` (see
-  the main README).
-- **`s3`** - `config_fetcher.py` polls an S3 bucket. `gatewayctl push-s3`
-  uploads `rendered/` there instead. Useful once you want config shared
-  across multiple gateway instances via a durable, versioned store.
+- **`http`** - the fetcher polls `config_server`, a small Go HTTP service
+  with its own `storage/` directory (has its own `Dockerfile`/`Makefile` -
+  deployable as its own service). `gatewayctl push-http` uploads
+  `rendered/cds.yaml`/`lds.yaml` to it over HTTP POST. The server doesn't
+  need to be colocated with `gatewayctl` - anywhere reachable over HTTP
+  works, which is what makes this option cloud-agnostic (no S3/GCS/Azure
+  dependency at all). Optionally gated by `API_TOKEN` (see the main
+  README).
+- **`s3`** - the fetcher polls an S3 bucket. `gatewayctl push-s3` uploads
+  `rendered/` there instead. Useful once you want config shared across
+  multiple gateway instances via a durable, versioned store.

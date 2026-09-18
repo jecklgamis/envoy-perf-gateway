@@ -6,26 +6,29 @@ no restart, no full xDS control plane.
 ## Install
 
 ```bash
-make venv && source .venv/bin/activate   # or: pip install -e "./gatewayctl[s3]"
+make -C gatewayctl install   # go install - puts gatewayctl on your $PATH
 gatewayctl --help
 ```
 
-`gatewayctl/` is a self-contained sub-project - its own `pyproject.toml`,
-own `Makefile`, own dependencies, `templates/*.j2` bundled as package data -
-structured as if it were a separate repo, even though it lives inside this
-one. That's what makes it produce a wheel installable anywhere, not just
-editable from a checkout of this repo (see below). `values.yaml` and the
-`rendered/` output directory still default to the current working
-directory and can be pointed elsewhere with `--values`/`--rendered-dir`
-(or `GATEWAYCTL_VALUES`/`GATEWAYCTL_RENDERED_DIR`), e.g. to run against
-multiple checkouts or a values file living outside any repo.
+`gatewayctl` is a Go CLI - a static binary with no runtime dependency, so
+it's easy to hand to teammates who don't have Go (or anything else)
+installed at all. `gatewayctl/` is a self-contained module (own `go.mod`, own `Makefile`),
+structured as if it were a separate repo even though it lives inside this
+one. `values.yaml` and the `rendered/` output directory default to the
+current working directory and can be pointed elsewhere with
+`--values`/`--rendered-dir` (or `GATEWAYCTL_VALUES`/`GATEWAYCTL_RENDERED_DIR`),
+e.g. to run against multiple checkouts or a values file living outside any
+repo.
 
-### Building a standalone gatewayctl wheel
+### Building gatewayctl for other platforms
 
 ```bash
-make build-gatewayctl   # or: cd gatewayctl && make build
-pip install gatewayctl/dist/*.whl
+make build-gatewayctl-all   # or: cd gatewayctl && make build-all
+ls gatewayctl/dist/          # gatewayctl-{darwin,linux}-{arm64,amd64}
 ```
+
+Each is a standalone binary - no install step needed, just copy it
+somewhere on `$PATH` and run it.
 
 See [docs/architecture.md](docs/architecture.md) for how config flows from
 `gatewayctl` through to a running Envoy, and why the HTTP/S3 distribution
@@ -34,7 +37,7 @@ split exists.
 ## Quickstart (HTTP source)
 
 ```bash
-make venv && source .venv/bin/activate
+make -C gatewayctl install
 make all                       # build image
 make -C config_server up       # build + run config_server container, :8090
 make run                       # run gateway container, polling it over HTTP
@@ -67,7 +70,7 @@ make run   # picks up CONFIG_API_TOKEN from the shell env
 ## Quickstart (S3 source)
 
 ```bash
-make venv && source .venv/bin/activate
+make -C gatewayctl install
 make all
 export CONFIG_S3_BUCKET=my-bucket CONFIG_S3_PREFIX=envoy-perf-gateway/
 make run-s3   # needs AWS credentials in your shell env (AWS_ACCESS_KEY_ID etc.)
@@ -106,7 +109,7 @@ gatewayctl remove-backend --name httpbin
 wiring a route (e.g. if you'll reference it from a hand-edited route later).
 Requests are matched with a path prefix and rewritten to `/` on the
 upstream. Everything not matched by a backend route falls through to the
-`default_app` cluster (the bundled Flask echo server on :5050).
+`default_app` cluster (the bundled Go echo server on :5050).
 
 ### Frontend/backend pairs (domain-based routing)
 

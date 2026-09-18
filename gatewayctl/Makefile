@@ -1,13 +1,21 @@
+BINARY := gatewayctl
+DIST := dist
+
 default:
 	@cat ./Makefile
-venv:
-	python3 -m venv .venv
-	.venv/bin/pip install -e ".[s3,build]"
-# Builds a wheel + sdist into dist/. Self-contained - installable anywhere
-# with `pip install dist/*.whl`, not just editable from this repo.
-build: venv
-	.venv/bin/python3 -m build
+# Builds a binary for your current OS/arch.
+build:
+	go build -o $(BINARY) .
+# Cross-compiles for macOS (arm64/amd64) and Linux (amd64/arm64) into dist/.
+build-all: clean
+	mkdir -p $(DIST)
+	GOOS=darwin  GOARCH=arm64 go build -o $(DIST)/$(BINARY)-darwin-arm64 .
+	GOOS=darwin  GOARCH=amd64 go build -o $(DIST)/$(BINARY)-darwin-amd64 .
+	GOOS=linux   GOARCH=amd64 go build -o $(DIST)/$(BINARY)-linux-amd64 .
+	GOOS=linux   GOARCH=arm64 go build -o $(DIST)/$(BINARY)-linux-arm64 .
 install: build
-	pip install --force-reinstall dist/*.whl
+	go install .
+test:
+	go test ./...
 clean:
-	rm -rf dist build *.egg-info .venv
+	rm -rf $(BINARY) $(DIST)
