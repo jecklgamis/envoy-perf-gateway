@@ -1,7 +1,7 @@
 # envoy-perf-gateway
 
-Envoy as a front door for perf/fault-injection testing. Add and remove
-backends with a CLI, no restart, no full xDS control plane.
+Envoy as a front door for perf testing. Add and remove backends with a CLI,
+no restart, no full xDS control plane.
 
 ## Install
 
@@ -147,26 +147,33 @@ Requests are matched with a path prefix and rewritten to `/` on the
 upstream. Everything not matched by a backend route falls through to the
 `default_app` cluster (the bundled Flask echo server on :5050).
 
-## Fault injection
+### Frontend/backend pairs (domain-based routing)
 
-Faults are wired into both listeners' HTTP filter chain at 0% by default, and
-toggled live via the Envoy admin API - no config reload needed, takes effect
-on the next request:
+Pair a backend with a specific frontend `Host` header instead of (or in
+addition to) a path prefix, via `--domain`. Each domain gets its own Envoy
+virtual host, matched by the request's `Host` header rather than sharing the
+catch-all one:
 
 ```bash
-# 30% of requests get a 503
-gatewayctl fault abort --percent 30 --status 503
+gatewayctl add-backend \
+  --name svc-a --host svc-a.internal --port 8080 \
+  --domain frontend-a.test.local
 
-# 20% of requests get a 2s delay
-gatewayctl fault delay --percent 20 --duration-ms 2000
+gatewayctl add-backend \
+  --name svc-b --host svc-b.internal --port 8080 \
+  --domain frontend-b.test.local --route-prefix /api/
 
-# back to baseline
-gatewayctl fault reset
+curl -H "Host: frontend-a.test.local" http://localhost:8080/
+curl -H "Host: frontend-b.test.local" http://localhost:8080/api/anything
 ```
 
-This requires the `layered_runtime.admin` layer in `config/envoy.yaml` -
-without it, `/runtime_modify` returns `503 No admin layer specified`.
+`--domain` alone routes everything under that Host header to the backend
+(`/` rewritten to nothing). Combined with `--route-prefix`, only that path
+prefix under the domain is routed there (rewritten to `/`), same as the
+path-only case. Backends with neither `--domain` nor `--route-prefix` set
+still register a cluster with no route at all.
 
 Run a load test (e.g. [fortio](https://github.com/fortio/fortio)) against
-`http://localhost:8080/` while toggling these to see how your client-side
-retry/timeout/circuit-breaker behavior holds up under a degraded upstream.
+`http://localhost:8080/` to characterize the gateway's overhead, or against
+a backend added via `add-backend` to test it through a realistic front
+door.

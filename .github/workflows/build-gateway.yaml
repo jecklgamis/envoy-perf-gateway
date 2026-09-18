@@ -14,7 +14,6 @@ on:
       - 'run-app.sh'
       - 'run-envoy.sh'
       - 'supervisor.ini'
-      - 'generate-ssl-certs.sh'
       - 'Dockerfile'
       - 'pyproject.toml'
       - '.github/workflows/build-gateway.yaml'
@@ -31,7 +30,6 @@ on:
       - 'run-app.sh'
       - 'run-envoy.sh'
       - 'supervisor.ini'
-      - 'generate-ssl-certs.sh'
       - 'Dockerfile'
       - 'pyproject.toml'
       - '.github/workflows/build-gateway.yaml'
@@ -41,8 +39,6 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v7
-      - name: Generate SSL certs
-        run: ./generate-ssl-certs.sh
       - name: Set up Python
         uses: actions/setup-python@v5
         with:

@@ -12,7 +12,7 @@ image:
 run:
 	-docker rm -f $(IMAGE_NAME) 2>/dev/null
 	docker run --name $(IMAGE_NAME) \
-		-p 8080:8080 -p 8443:8443 -p 9901:9901 \
+		-p 8080:8080 -p 9901:9901 \
 		-e CONFIG_SOURCE_KIND=http \
 		-e CONFIG_SOURCE_URL=http://host.docker.internal:8090 \
 		-e CONFIG_API_TOKEN \
@@ -22,7 +22,7 @@ run:
 # container's environment (mount ~/.aws, or pass -e AWS_ACCESS_KEY_ID etc).
 run-s3:
 	docker run -d --name $(IMAGE_NAME) \
-		-p 8080:8080 -p 8443:8443 -p 9901:9901 \
+		-p 8080:8080 -p 9901:9901 \
 		-e CONFIG_SOURCE_KIND=s3 \
 		-e CONFIG_S3_BUCKET=$(CONFIG_S3_BUCKET) \
 		-e CONFIG_S3_PREFIX=$(CONFIG_S3_PREFIX) \
@@ -36,11 +36,9 @@ exec-shell:
 	docker exec -it `docker ps | grep $(IMAGE_NAME) | awk '{print $$1}'` /bin/bash
 config-server:
 	.venv/bin/python3 config_server/config_server.py
-ssl-certs:
-	@./generate-ssl-certs.sh
 venv:
 	python3 -m venv .venv
 	.venv/bin/pip install -e ".[s3]"
 	.venv/bin/pip install -r config_server/requirements.txt
-all: ssl-certs image
+all: image
 up: all run

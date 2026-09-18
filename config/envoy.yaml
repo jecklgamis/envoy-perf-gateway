@@ -9,15 +9,6 @@ node:
   cluster: envoy-perf-gateway
   id: local
 
-# Required for POST /runtime_modify (used by `gatewayctl fault ...`) to be
-# accepted - without an admin layer Envoy refuses with 503 "No admin layer
-# specified", even though the runtime keys referenced by the fault filter
-# are otherwise valid.
-layered_runtime:
-  layers:
-    - name: admin
-      admin_layer: {}
-
 # Clusters (CDS) and listeners (LDS) are loaded dynamically from files that
 # Envoy watches via inotify (see watched_directory). This is NOT xDS over
 # gRPC/REST - there is no control-plane process. `gatewayctl/cli.py` renders

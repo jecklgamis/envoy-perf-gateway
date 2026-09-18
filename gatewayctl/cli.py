@@ -66,13 +66,20 @@ def render_cmd(obj):
 @click.option("--host", required=True, help="Upstream host/IP")
 @click.option("--port", required=True, type=int)
 @click.option("--tls/--no-tls", default=False, help="Terminate TLS to the upstream")
+@click.option("--domain", default=None,
+              help="Frontend Host header this backend is paired with, e.g. "
+                   "frontend-a.test.local. Gets its own virtual host matched "
+                   "by domain, instead of a path prefix under the catch-all "
+                   "one. Combine with --route-prefix to also scope by path "
+                   "within that domain.")
 @click.option("--route-prefix", default=None,
               help="Path prefix routed to this backend (rewritten to /). "
-                   "Omit to only add the cluster without a route.")
+                   "Omit (with no --domain either) to only add the cluster "
+                   "without a route.")
 @click.option("--connect-timeout", default="5s")
 @click.option("--timeout", default="15s")
 @click.pass_obj
-def add_backend(obj, name, host, port, tls, route_prefix, connect_timeout, timeout):
+def add_backend(obj, name, host, port, tls, domain, route_prefix, connect_timeout, timeout):
     """Add (or replace) a backend and hot-reload Envoy - no restart."""
     values = load_values(obj["values_path"])
     backends = values.setdefault("backends", [])
@@ -82,14 +89,20 @@ def add_backend(obj, name, host, port, tls, route_prefix, connect_timeout, timeo
         "host": host,
         "port": port,
         "tls": tls,
+        "domain": domain,
         "route_prefix": route_prefix,
         "connect_timeout": connect_timeout,
         "timeout": timeout,
     })
     save_values(obj["values_path"], values)
     regenerate(obj["values_path"], obj["rendered_dir"])
+    routed_via = []
+    if domain:
+        routed_via.append(f"domain {domain}")
+    if route_prefix:
+        routed_via.append(f"prefix {route_prefix}")
     click.echo(f"Added backend '{name}' -> {host}:{port}"
-               + (f" (routed from {route_prefix})" if route_prefix else ""))
+               + (f" (routed via {', '.join(routed_via)})" if routed_via else ""))
 
 
 @cli.command("remove-backend")
@@ -118,7 +131,16 @@ def list_backends(obj):
         click.echo("No backends configured")
         return
     for b in backends:
-        route = b.get("route_prefix") or "(no route, cluster only)"
+        domain = b.get("domain")
+        route_prefix = b.get("route_prefix")
+        if domain and route_prefix:
+            route = f"{domain}{route_prefix}"
+        elif domain:
+            route = domain
+        elif route_prefix:
+            route = route_prefix
+        else:
+            route = "(no route, cluster only)"
         tls = "tls" if b.get("tls") else "plaintext"
         click.echo(f"{b['name']:<20} {b['host']}:{b['port']:<6} {tls:<10} {route}")
 
@@ -165,48 +187,6 @@ def push_s3(obj, bucket, prefix):
         key = f"{prefix}{filename}" if prefix else filename
         client.upload_file(local_path, bucket, key)
         click.echo(f"Uploaded {local_path} -> s3://{bucket}/{key}")
-
-
-@cli.group()
-def fault():
-    """Toggle fault injection at runtime via the Envoy admin API.
-
-    No config reload involved - these hit /runtime_modify on the admin
-    port directly, so changes take effect on the next request.
-    """
-
-
-@fault.command("abort")
-@click.option("--percent", required=True, type=int, help="0-100")
-@click.option("--status", default=503, type=int, help="HTTP status to return")
-@click.option("--admin-url", default="http://localhost:9901", envvar="ENVOY_ADMIN_URL")
-def fault_abort(percent, status, admin_url):
-    url = (f"{admin_url.rstrip('/')}/runtime_modify"
-           f"?fault.http.abort.abort_percent={percent}"
-           f"&fault.http.abort.http_status={status}")
-    r = requests.post(url, timeout=5)
-    click.echo(f"{r.status_code} abort_percent={percent} status={status}")
-
-
-@fault.command("delay")
-@click.option("--percent", required=True, type=int, help="0-100")
-@click.option("--duration-ms", required=True, type=int)
-@click.option("--admin-url", default="http://localhost:9901", envvar="ENVOY_ADMIN_URL")
-def fault_delay(percent, duration_ms, admin_url):
-    url = (f"{admin_url.rstrip('/')}/runtime_modify"
-           f"?fault.http.delay.delay_percent={percent}"
-           f"&fault.http.delay.fixed_duration_ms={duration_ms}")
-    r = requests.post(url, timeout=5)
-    click.echo(f"{r.status_code} delay_percent={percent} duration_ms={duration_ms}")
-
-
-@fault.command("reset")
-@click.option("--admin-url", default="http://localhost:9901", envvar="ENVOY_ADMIN_URL")
-def fault_reset(admin_url):
-    url = (f"{admin_url.rstrip('/')}/runtime_modify"
-           f"?fault.http.abort.abort_percent=0&fault.http.delay.delay_percent=0")
-    r = requests.post(url, timeout=5)
-    click.echo(f"{r.status_code} fault injection reset to 0%")
 
 
 if __name__ == "__main__":

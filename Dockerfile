@@ -18,11 +18,8 @@ RUN mkdir -p /etc/envoy/dynamic
 COPY rendered/ /etc/envoy/dynamic/
 
 COPY fetcher/ /fetcher/
-COPY server.crt /etc/
-COPY server.key /etc/
 
 EXPOSE 8080
-EXPOSE 8443
 EXPOSE 9901
 
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]

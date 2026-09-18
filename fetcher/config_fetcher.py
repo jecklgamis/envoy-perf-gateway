@@ -20,7 +20,7 @@ from atomic_write import atomic_write_bytes
 
 CONFIG_FILES = os.environ.get("CONFIG_FILES", "cds.yaml,lds.yaml").split(",")
 TARGET_DIR = os.environ.get("CONFIG_TARGET_DIR", "/etc/envoy/dynamic")
-POLL_INTERVAL_SECONDS = float(os.environ.get("CONFIG_POLL_INTERVAL_SECONDS", "5"))
+POLL_INTERVAL_SECONDS = float(os.environ.get("CONFIG_POLL_INTERVAL_SECONDS", "15"))
 SOURCE_KIND = os.environ.get("CONFIG_SOURCE_KIND", "http")
 
 
