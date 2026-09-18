@@ -163,7 +163,7 @@ func main() {
 
 	lastHash := map[string]string{}
 	for {
-		for _, filename := range files {
+		for i, filename := range files {
 			content, err := src.fetch(filename)
 			if err != nil {
 				logMsg("WARNING", "Fetch failed for %s: %v", filename, err)
@@ -184,6 +184,21 @@ func main() {
 			}
 			lastHash[filename] = digest
 			logMsg("INFO", "Fetched %s successfully, updated %s (%d bytes)", filename, targetPath, len(content))
+
+			// CONFIG_FILES defaults to "cds.yaml,lds.yaml" - in that order
+			// on purpose. Envoy reloads each file independently on its own
+			// inotify event; a new listener can reference a cluster that
+			// was just added, so if lds.yaml's write (and Envoy's reload
+			// of it) races ahead of cds.yaml's, Envoy rejects the listener
+			// with "unknown cluster" and - since we only rewrite a file
+			// when its content changes - never gets another inotify event
+			// to retry on, leaving it permanently stuck. A short settle
+			// delay after writing a file that has more files queued behind
+			// it gives Envoy's (typically sub-millisecond) cluster manager
+			// update time to land first.
+			if i < len(files)-1 {
+				time.Sleep(300 * time.Millisecond)
+			}
 		}
 		time.Sleep(time.Duration(pollInterval * float64(time.Second)))
 	}
