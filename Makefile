@@ -1,5 +1,10 @@
 IMAGE_NAME:=envoy-perf-gateway
 IMAGE_TAG:=$(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo local)
+# config_server always requires API_TOKEN now (see config_server/Makefile).
+# Defaults to "default" here too for local dev convenience - matches
+# config_server's own default when nothing's exported. Export your own in
+# the shell to override it for anything beyond local dev.
+CONFIG_API_TOKEN?=default
 
 default:
 	@cat ./Makefile
@@ -7,15 +12,14 @@ image:
 	docker build -t $(IMAGE_NAME):$(IMAGE_TAG) .
 # HTTP source mode: the config-fetcher binary inside the container polls
 # config_server, which you must run first (make -C config_server up).
-# host.docker.internal lets the container reach the host. config_server
-# always requires API_TOKEN now, so CONFIG_API_TOKEN must be set here too.
+# host.docker.internal lets the container reach the host.
 run:
 	-docker rm -f $(IMAGE_NAME) 2>/dev/null
 	docker run --name $(IMAGE_NAME) \
 		-p 8080:8080 -p 9901:9901 \
 		-e CONFIG_SOURCE_KIND=http \
 		-e CONFIG_SOURCE_URL=http://host.docker.internal:8090 \
-		-e CONFIG_API_TOKEN \
+		-e CONFIG_API_TOKEN=$(CONFIG_API_TOKEN) \
 		$(IMAGE_NAME):$(IMAGE_TAG)
 # S3 source mode: run `gatewayctl push-s3 --bucket ...` after add-backend
 # instead of relying on the local HTTP server. Needs AWS credentials in the

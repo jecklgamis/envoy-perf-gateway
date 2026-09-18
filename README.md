@@ -1,7 +1,11 @@
 # envoy-perf-gateway
 
-Envoy as a front door for perf testing. Add and remove backends with a CLI,
-no restart, no full xDS control plane.
+[![Build Gateway](https://github.com/jecklgamis/envoy-perf-gateway/actions/workflows/build-gateway.yaml/badge.svg)](https://github.com/jecklgamis/envoy-perf-gateway/actions/workflows/build-gateway.yaml)
+[![Build Config Server](https://github.com/jecklgamis/envoy-perf-gateway/actions/workflows/build-config-server.yaml/badge.svg)](https://github.com/jecklgamis/envoy-perf-gateway/actions/workflows/build-config-server.yaml)
+
+Envoy as a front door for perf and chaos testing. Add and remove backends
+with a CLI, toggle fault injection at runtime, no restart, no full xDS
+control plane.
 
 ## Install
 
@@ -175,7 +179,35 @@ prefix under the domain is routed there (rewritten to `/`), same as the
 path-only case. Backends with neither `--domain` nor `--route-prefix` set
 still register a cluster with no route at all.
 
+## Fault injection
+
+Every route - each `add-backend`, plus the `default_app` fallback - gets
+its own independently-toggleable fault injection, isolated via a unique
+Envoy runtime key per `--target`. Faulting one backend never affects any
+other's traffic. Toggled live via the Envoy admin API - no config reload
+needed, takes effect on the next request:
+
+```bash
+# 30% of backend-1's requests get a 503 - backend-2, default_app, etc. untouched
+gatewayctl fault abort --target backend-1 --percent 30 --status 503
+
+# 20% of backend-1's requests get a 2s delay
+gatewayctl fault delay --target backend-1 --percent 20 --duration-ms 2000
+
+# back to baseline for backend-1
+gatewayctl fault reset --target backend-1
+
+# target the default_app fallback route instead
+gatewayctl fault abort --target default_app --percent 100 --status 503
+```
+
+`--target` is the backend name exactly as passed to `add-backend --name`,
+or `default_app` for the fallback route. This requires the
+`layered_runtime.admin` layer in `config/envoy.yaml` - without it,
+`/runtime_modify` returns `503 No admin layer specified`.
+
 Run a load test (e.g. [fortio](https://github.com/fortio/fortio)) against
-`http://localhost:8080/` to characterize the gateway's overhead, or against
-a backend added via `add-backend` to test it through a realistic front
-door.
+`http://localhost:8080/` while toggling these to see how your client-side
+retry/timeout/circuit-breaker behavior holds up under a degraded upstream,
+or just against a backend added via `add-backend` to characterize it
+through a realistic front door.

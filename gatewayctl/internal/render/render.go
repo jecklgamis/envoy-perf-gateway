@@ -91,20 +91,22 @@ func BuildLDS(v config.Values) ec.LDS {
 				Name:    b.Name,
 				Domains: []string{b.Domain},
 				Routes: []ec.Route{
-					{Match: ec.RouteMatch{Prefix: prefix}, Route: action},
+					{Match: ec.RouteMatch{Prefix: prefix}, Route: action, TypedPerFilterConfig: ec.FaultPerRoute(b.Name)},
 				},
 			})
 		case b.RoutePrefix != "":
 			catchAllRoutes = append(catchAllRoutes, ec.Route{
-				Match: ec.RouteMatch{Prefix: b.RoutePrefix},
-				Route: ec.RouteAction{Cluster: b.Name, PrefixRewrite: "/", Timeout: b.Timeout},
+				Match:                ec.RouteMatch{Prefix: b.RoutePrefix},
+				Route:                ec.RouteAction{Cluster: b.Name, PrefixRewrite: "/", Timeout: b.Timeout},
+				TypedPerFilterConfig: ec.FaultPerRoute(b.Name),
 			})
 		}
 	}
 
 	catchAllRoutes = append(catchAllRoutes, ec.Route{
-		Match: ec.RouteMatch{Prefix: "/"},
-		Route: ec.RouteAction{Cluster: "default_app", Timeout: "15s"},
+		Match:                ec.RouteMatch{Prefix: "/"},
+		Route:                ec.RouteAction{Cluster: "default_app", Timeout: "15s"},
+		TypedPerFilterConfig: ec.FaultPerRoute("default_app"),
 	})
 
 	virtualHosts := append(domainVHosts, ec.VirtualHost{
@@ -131,6 +133,15 @@ func BuildLDS(v config.Values) ec.LDS {
 							VirtualHosts: virtualHosts,
 						},
 						HTTPFilters: []ec.HTTPFilter{
+							{Name: "envoy.filters.http.fault", TypedConfig: ec.FaultTypedConfig{
+								Type:                   ec.TypeFault,
+								Abort:                  ec.FaultAbort{HTTPStatus: 503, Percentage: ec.Percentage{Numerator: 0, Denominator: "HUNDRED"}},
+								Delay:                  ec.FaultDelay{FixedDelay: "2s", Percentage: ec.Percentage{Numerator: 0, Denominator: "HUNDRED"}},
+								AbortPercentRuntime:    "fault.http.abort.abort_percent",
+								AbortHTTPStatusRuntime: "fault.http.abort.http_status",
+								DelayPercentRuntime:    "fault.http.delay.delay_percent",
+								DelayDurationRuntime:   "fault.http.delay.fixed_duration_ms",
+							}},
 							{Name: "envoy.filters.http.router", TypedConfig: ec.RouterTypedConfig{Type: ec.TypeRouter}},
 						},
 					},
