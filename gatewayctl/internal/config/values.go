@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
@@ -42,9 +43,14 @@ func Load(path string) (Values, error) {
 	return v, nil
 }
 
+// Save writes values.yaml, creating its parent directory if needed - e.g.
+// config/ on a fresh checkout that's never had a backend added before.
 func Save(path string, v Values) error {
 	data, err := yaml.Marshal(v)
 	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 	return os.WriteFile(path, data, 0o644)
