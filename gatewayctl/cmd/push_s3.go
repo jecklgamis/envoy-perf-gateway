@@ -24,13 +24,21 @@ var pushS3Cmd = &cobra.Command{
 	Long: `Upload rendered cds.yaml and lds.yaml to S3 for the in-container
 fetcher to pick up (CONFIG_SOURCE_KIND=s3). Regenerates first.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if psBucket == "" {
-			return fmt.Errorf(`required flag "bucket" not set`)
+		bucket := psBucket
+		if !cmd.Flags().Changed("bucket") {
+			bucket = resolveS3Bucket()
+		}
+		prefix := psPrefix
+		if !cmd.Flags().Changed("prefix") {
+			prefix = resolveS3Prefix()
+		}
+		if bucket == "" {
+			return fmt.Errorf(`required flag "bucket" not set (and no s3.bucket in the settings file)`)
 		}
 		if _, err := regenerate(); err != nil {
 			return err
 		}
-		return pushS3Files(psBucket, psPrefix)
+		return pushS3Files(bucket, prefix)
 	},
 }
 
@@ -68,7 +76,12 @@ func pushS3Files(bucket, prefix string) error {
 }
 
 func init() {
-	pushS3Cmd.Flags().StringVar(&psBucket, "bucket", os.Getenv("CONFIG_S3_BUCKET"), "")
-	pushS3Cmd.Flags().StringVar(&psPrefix, "prefix", envOr("CONFIG_S3_PREFIX", ""), "Key prefix, e.g. 'envoy-perf-gateway/'")
+	// Actual resolution (CLI flag > env var > settings file) happens in
+	// RunE via resolveS3Bucket()/resolveS3Prefix() - see push_http.go's
+	// init() for why it can't happen here.
+	pushS3Cmd.Flags().StringVar(&psBucket, "bucket", "",
+		"S3 bucket. Falls back to CONFIG_S3_BUCKET, then the settings file's s3.bucket.")
+	pushS3Cmd.Flags().StringVar(&psPrefix, "prefix", "",
+		"Key prefix, e.g. 'envoy-perf-gateway/'. Falls back to CONFIG_S3_PREFIX, then the settings file's s3.prefix.")
 	rootCmd.AddCommand(pushS3Cmd)
 }

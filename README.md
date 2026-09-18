@@ -107,10 +107,29 @@ gatewayctl remove-backend --name httpbin
 
 ### Skipping the separate push step
 
-Set `CONFIG_SOURCE_KIND` (the same env var the fetcher inside the
-container uses to decide where to read config from) and `add-backend`/
-`remove-backend` push automatically after every change - no separate
-`push-http`/`push-s3` call needed:
+Set a mode and `add-backend`/`remove-backend` push automatically after
+every change - no separate `push-http`/`push-s3` call needed. Two ways to
+set it:
+
+**Settings file** (persists across sessions, `~/.config/gatewayctl/config.yaml`
+by default - override with `--config`/`GATEWAYCTL_CONFIG`):
+
+```bash
+gatewayctl config set mode http
+gatewayctl config set http.server-url http://localhost:8090
+gatewayctl config set http.api-token some-token   # if config_server requires one
+
+# or for S3:
+gatewayctl config set mode s3
+gatewayctl config set s3.bucket my-bucket
+gatewayctl config set s3.prefix envoy-perf-gateway/
+
+gatewayctl config view    # see what's configured
+gatewayctl config set mode ""   # back to no auto-push
+```
+
+**Env vars** (session-scoped, useful in CI or to override the settings
+file for one shell):
 
 ```bash
 export CONFIG_SOURCE_KIND=http
@@ -119,14 +138,17 @@ export CONFIG_SERVER_URL=http://localhost:8090       # + CONFIG_SERVER_API_TOKEN
 # or for S3:
 export CONFIG_SOURCE_KIND=s3
 export CONFIG_S3_BUCKET=my-bucket CONFIG_S3_PREFIX=envoy-perf-gateway/
+```
 
+```bash
 gatewayctl add-backend --name httpbin --host httpbin.org --port 443 --tls --route-prefix /httpbin/
 # already pushed - no push-http/push-s3 needed
 ```
 
-Leave `CONFIG_SOURCE_KIND` unset and nothing changes - `add-backend`/
-`remove-backend` only touch `config/values.yaml` and `rendered/`, same as
-before.
+Precedence per value is env var > settings file > built-in default. Leave
+both unset and nothing changes - `add-backend`/`remove-backend` only touch
+`config/values.yaml` and `rendered/`, same as before. The settings file is
+written with `0600` permissions since `http.api-token` may hold a secret.
 
 `--route-prefix` is optional - omit it to register the cluster without
 wiring a route (e.g. if you'll reference it from a hand-edited route later).

@@ -30,7 +30,15 @@ run the CLI. Regenerates first.`,
 		if _, err := regenerate(); err != nil {
 			return err
 		}
-		return pushHTTPFiles(phServerURL, phAPIToken)
+		serverURL := phServerURL
+		if !cmd.Flags().Changed("server-url") {
+			serverURL = resolveServerURL()
+		}
+		apiToken := phAPIToken
+		if !cmd.Flags().Changed("api-token") {
+			apiToken = resolveAPIToken()
+		}
+		return pushHTTPFiles(serverURL, apiToken)
 	},
 }
 
@@ -94,9 +102,13 @@ func uploadFile(url, localPath, apiToken string) error {
 }
 
 func init() {
-	pushHTTPCmd.Flags().StringVar(&phServerURL, "server-url", envOr("CONFIG_SERVER_URL", "http://localhost:8090"),
-		"Base URL of a running config_server.")
-	pushHTTPCmd.Flags().StringVar(&phAPIToken, "api-token", os.Getenv("CONFIG_SERVER_API_TOKEN"),
-		"Sent as 'Authorization: Bearer <token>'. Required if the server was started with API_TOKEN set.")
+	// Static defaults shown in --help; actual resolution (CLI flag > env
+	// var > settings file > this default) happens in RunE via
+	// resolveServerURL()/resolveAPIToken(), since the settings file isn't
+	// loaded yet when init() runs.
+	pushHTTPCmd.Flags().StringVar(&phServerURL, "server-url", "http://localhost:8090",
+		"Base URL of a running config_server. Falls back to CONFIG_SERVER_URL, then the settings file's http.server_url.")
+	pushHTTPCmd.Flags().StringVar(&phAPIToken, "api-token", "",
+		"Sent as 'Authorization: Bearer <token>'. Falls back to CONFIG_SERVER_API_TOKEN, then the settings file's http.api_token.")
 	rootCmd.AddCommand(pushHTTPCmd)
 }

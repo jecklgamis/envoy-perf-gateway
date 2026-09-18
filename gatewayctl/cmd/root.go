@@ -10,16 +10,31 @@ import (
 	"github.com/jecklgamis/envoy-perf-gateway/gatewayctl/internal/atomicwrite"
 	"github.com/jecklgamis/envoy-perf-gateway/gatewayctl/internal/config"
 	"github.com/jecklgamis/envoy-perf-gateway/gatewayctl/internal/render"
+	"github.com/jecklgamis/envoy-perf-gateway/gatewayctl/internal/settings"
 )
 
 var (
 	valuesPath  string
 	renderedDir string
+	configPath  string
+
+	// appSettings is loaded in rootCmd's PersistentPreRunE, once flags are
+	// parsed - not at package-init time, so --config/GATEWAYCTL_CONFIG can
+	// actually pick which file gets read.
+	appSettings settings.Settings
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "gatewayctl",
 	Short: "envoy-perf-gateway control CLI",
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		s, err := settings.Load(configPath)
+		if err != nil {
+			return fmt.Errorf("loading %s: %w", configPath, err)
+		}
+		appSettings = s
+		return nil
+	},
 }
 
 func Execute() {
@@ -40,6 +55,8 @@ func init() {
 		"Path to values.yaml. Defaults to config/values.yaml in the current working directory.")
 	rootCmd.PersistentFlags().StringVar(&renderedDir, "rendered-dir", envOr("GATEWAYCTL_RENDERED_DIR", defaultRendered),
 		"Directory to write rendered cds.yaml/lds.yaml into.")
+	rootCmd.PersistentFlags().StringVar(&configPath, "config", envOr("GATEWAYCTL_CONFIG", settings.DefaultPath()),
+		"Path to gatewayctl's settings file (mode, config_server URL/token, S3 bucket/prefix).")
 }
 
 func envOr(key, fallback string) string {
@@ -74,25 +91,68 @@ func regenerate() (config.Values, error) {
 	return v, nil
 }
 
-// autoPushIfConfigured pushes the already-rendered cds.yaml/lds.yaml when
-// CONFIG_SOURCE_KIND is set - the same env var the fetcher (running inside
-// the container) uses to decide where to read config from. This lets
-// add-backend/remove-backend double as "and distribute it" without a
-// separate push-http/push-s3 call, while staying a no-op (today's
-// behavior, unchanged) when CONFIG_SOURCE_KIND isn't set.
+// Each resolver applies env var > settings file > hard-coded default, in
+// that order - an env var always wins so CI/container-style overrides
+// still work without touching the settings file.
+
+func resolveMode() string {
+	if v := os.Getenv("CONFIG_SOURCE_KIND"); v != "" {
+		return v
+	}
+	return appSettings.Mode
+}
+
+func resolveServerURL() string {
+	if v := os.Getenv("CONFIG_SERVER_URL"); v != "" {
+		return v
+	}
+	if appSettings.HTTP.ServerURL != "" {
+		return appSettings.HTTP.ServerURL
+	}
+	return "http://localhost:8090"
+}
+
+func resolveAPIToken() string {
+	if v := os.Getenv("CONFIG_SERVER_API_TOKEN"); v != "" {
+		return v
+	}
+	return appSettings.HTTP.APIToken
+}
+
+func resolveS3Bucket() string {
+	if v := os.Getenv("CONFIG_S3_BUCKET"); v != "" {
+		return v
+	}
+	return appSettings.S3.Bucket
+}
+
+func resolveS3Prefix() string {
+	if v := os.Getenv("CONFIG_S3_PREFIX"); v != "" {
+		return v
+	}
+	return appSettings.S3.Prefix
+}
+
+// autoPushIfConfigured pushes the already-rendered cds.yaml/lds.yaml when a
+// mode is configured, via CONFIG_SOURCE_KIND or the settings file's `mode`
+// - the same signal the fetcher (running inside the container) uses to
+// decide where to read config from. This lets add-backend/remove-backend
+// double as "and distribute it" without a separate push-http/push-s3 call,
+// while staying a no-op (today's behavior, unchanged) when no mode is set
+// anywhere.
 func autoPushIfConfigured() error {
-	switch kind := os.Getenv("CONFIG_SOURCE_KIND"); kind {
+	switch mode := resolveMode(); mode {
 	case "":
 		return nil
 	case "http":
-		return pushHTTPFiles(envOr("CONFIG_SERVER_URL", "http://localhost:8090"), os.Getenv("CONFIG_SERVER_API_TOKEN"))
+		return pushHTTPFiles(resolveServerURL(), resolveAPIToken())
 	case "s3":
-		bucket := os.Getenv("CONFIG_S3_BUCKET")
+		bucket := resolveS3Bucket()
 		if bucket == "" {
-			return fmt.Errorf("CONFIG_SOURCE_KIND=s3 requires CONFIG_S3_BUCKET to also be set")
+			return fmt.Errorf("mode=s3 requires CONFIG_S3_BUCKET or settings file s3.bucket to be set")
 		}
-		return pushS3Files(bucket, os.Getenv("CONFIG_S3_PREFIX"))
+		return pushS3Files(bucket, resolveS3Prefix())
 	default:
-		return fmt.Errorf("unsupported CONFIG_SOURCE_KIND: %s (want \"http\" or \"s3\")", kind)
+		return fmt.Errorf("unsupported mode: %s (want \"http\" or \"s3\")", mode)
 	}
 }
