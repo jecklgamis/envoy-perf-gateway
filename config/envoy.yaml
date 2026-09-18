@@ -11,10 +11,11 @@ node:
 
 # Clusters (CDS) and listeners (LDS) are loaded dynamically from files that
 # Envoy watches via inotify (see watched_directory). This is NOT xDS over
-# gRPC/REST - there is no control-plane process. `gatewayctl/cli.py` renders
-# config/dynamic/cds.yaml and config/dynamic/lds.yaml from values.yaml and
-# atomically swaps them in; Envoy picks up the change and hot-reloads with
-# no restart and no dropped connections.
+# gRPC/REST - there is no control-plane process. `gatewayctl` renders
+# rendered/cds.yaml and rendered/lds.yaml from values.yaml and distributes
+# them (HTTP or S3); config_fetcher.py atomically swaps them in here; Envoy
+# picks up the change and hot-reloads with no restart and no dropped
+# connections.
 dynamic_resources:
   cds_config:
     resource_api_version: V3

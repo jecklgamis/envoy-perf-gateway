@@ -7,8 +7,8 @@ image:
 	docker build -t $(IMAGE_NAME):$(IMAGE_TAG) .
 # HTTP source mode: config_fetcher.py inside the container polls
 # config_server/config_server.py, which you must run first (make -C
-# config_server up, or config-server below). host.docker.internal lets the
-# container reach the host. Set CONFIG_API_TOKEN if the server requires one.
+# config_server up). host.docker.internal lets the container reach the
+# host. Set CONFIG_API_TOKEN if the server requires one.
 run:
 	-docker rm -f $(IMAGE_NAME) 2>/dev/null
 	docker run --name $(IMAGE_NAME) \
@@ -34,11 +34,13 @@ run-shell:
 	docker run -i -t $(IMAGE_NAME):$(IMAGE_TAG) /bin/bash
 exec-shell:
 	docker exec -it `docker ps | grep $(IMAGE_NAME) | awk '{print $$1}'` /bin/bash
-config-server:
-	.venv/bin/python3 config_server/config_server.py
 venv:
 	python3 -m venv .venv
-	.venv/bin/pip install -e ".[s3]"
-	.venv/bin/pip install -r config_server/requirements.txt
+	.venv/bin/pip install -e "./gatewayctl[s3]"
+# gatewayctl is a self-contained sub-project (own pyproject.toml, own
+# Makefile, templates bundled as package data) - `pip install
+# gatewayctl/dist/*.whl` works standalone, not just editable from this repo.
+build-gatewayctl:
+	$(MAKE) -C gatewayctl build
 all: image
 up: all run

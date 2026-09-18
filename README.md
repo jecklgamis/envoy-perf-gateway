@@ -6,75 +6,36 @@ no restart, no full xDS control plane.
 ## Install
 
 ```bash
-make venv && source .venv/bin/activate   # or: pip install -e ".[s3]"
+make venv && source .venv/bin/activate   # or: pip install -e "./gatewayctl[s3]"
 gatewayctl --help
 ```
 
-`gatewayctl` is a proper installed console script (`gatewayctl/` is a real
-Python package, see `pyproject.toml`), not a script you invoke with
-`python3 path/to/file.py`. `templates/` is always resolved relative to this
-repo, but `values.yaml` and the `rendered/` output directory default to
-this repo's paths and can be pointed elsewhere with `--values`/
-`--rendered-dir` (or `GATEWAYCTL_VALUES`/`GATEWAYCTL_RENDERED_DIR`), e.g. to
-run against multiple checkouts or a values file living outside the repo.
+`gatewayctl/` is a self-contained sub-project - its own `pyproject.toml`,
+own `Makefile`, own dependencies, `templates/*.j2` bundled as package data -
+structured as if it were a separate repo, even though it lives inside this
+one. That's what makes it produce a wheel installable anywhere, not just
+editable from a checkout of this repo (see below). `values.yaml` and the
+`rendered/` output directory still default to the current working
+directory and can be pointed elsewhere with `--values`/`--rendered-dir`
+(or `GATEWAYCTL_VALUES`/`GATEWAYCTL_RENDERED_DIR`), e.g. to run against
+multiple checkouts or a values file living outside any repo.
 
-## Architecture
+### Building a standalone gatewayctl wheel
 
-```
-gatewayctl (host)                                  Envoy container
-  add-backend/remove-backend                     +-------------------------------+
-        |                                         | config-fetcher (supervisor)  |
-        v                                         |   polls HTTP or S3           |
-  values.yaml -> render -> rendered/{cds,lds}.yaml |   atomic-writes into --v      |
-        |                                         v                          |   |
-        |                              /etc/envoy/dynamic  <------------------+
-        |  HTTP: gatewayctl push-http uploads to config_server's own storage/       |
-        |  S3:   gatewayctl push-s3 uploads rendered/ to a bucket                  v
-        +------------------------------------------------------> Envoy inotify watch -> hot-reload
+```bash
+make build-gatewayctl   # or: cd gatewayctl && make build
+pip install gatewayctl/dist/*.whl
 ```
 
-Clusters and routes are **not** static in `config/envoy.yaml`. The bootstrap
-only points `dynamic_resources.cds_config` / `lds_config` at
-`/etc/envoy/dynamic/{cds,lds}.yaml` inside the container, with
-`watched_directory` set so Envoy watches that directory via inotify.
-
-`config/dynamic` is **not** bind-mounted from the host. On Docker Desktop
-for Mac, host-side writes into a bind-mounted directory sync file content
-into the container but do not reliably propagate the underlying inotify
-event, so Envoy never notices the change even though the file is correct.
-Instead, `fetcher/config_fetcher.py` runs *inside* the container
-(via `supervisor.ini`) and polls a remote source for `cds.yaml`/`lds.yaml`,
-writing them into `/etc/envoy/dynamic` itself - a write native to the
-container's own filesystem, which does trigger Envoy's inotify watch.
-`gatewayctl` on the host only ever writes to `values.yaml` and the local
-`rendered/` directory; it never touches the container's filesystem
-directly. Both `gatewayctl` and the fetcher write atomically (temp file +
-`os.replace`, not delete-then-write) so a reader never observes a missing
-or partial file mid-swap.
-
-Two distribution mechanisms are supported, selected by the
-`CONFIG_SOURCE_KIND` env var on the container. Both are cloud-agnostic
-(no dependency on a specific provider) and both require an explicit push
-after each change - `gatewayctl` never touches the container or the fetcher's
-source directly, only the distribution endpoint:
-
-- **`http`** - `config_fetcher.py` polls `config_server/config_server.py`,
-  a small Flask app with its own `storage/` directory (has its own
-  `Dockerfile`/`Makefile` - deployable as its own service). `gatewayctl
-  push-http` uploads `rendered/cds.yaml`/`lds.yaml` to it over HTTP POST.
-  The server doesn't need to be colocated with `gatewayctl` - anywhere
-  reachable over HTTP works, which is what makes this option cloud-agnostic
-  (no S3/GCS/Azure dependency at all). Optionally gated by `API_TOKEN` (see
-  below).
-- **`s3`** - `config_fetcher.py` polls an S3 bucket. `gatewayctl push-s3`
-  uploads `rendered/` there instead. Useful once you want config shared
-  across multiple gateway instances via a durable, versioned store.
+See [docs/architecture.md](docs/architecture.md) for how config flows from
+`gatewayctl` through to a running Envoy, and why the HTTP/S3 distribution
+split exists.
 
 ## Quickstart (HTTP source)
 
 ```bash
 make venv && source .venv/bin/activate
-make all                       # generate SSL certs + build image
+make all                       # build image
 make -C config_server up       # build + run config_server container, :8090
 make run                       # run gateway container, polling it over HTTP
 

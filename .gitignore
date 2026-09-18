@@ -4,3 +4,5 @@ __pycache__/
 rendered/
 config_server/storage/
 *.egg-info/
+dist/
+build/

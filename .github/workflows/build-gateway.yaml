@@ -9,13 +9,11 @@ on:
       - 'config/**'
       - 'gatewayctl/**'
       - 'fetcher/**'
-      - 'templates/**'
       - 'values.yaml'
       - 'run-app.sh'
       - 'run-envoy.sh'
       - 'supervisor.ini'
       - 'Dockerfile'
-      - 'pyproject.toml'
       - '.github/workflows/build-gateway.yaml'
   pull_request:
     types: [ opened, reopened ]
@@ -25,13 +23,11 @@ on:
       - 'config/**'
       - 'gatewayctl/**'
       - 'fetcher/**'
-      - 'templates/**'
       - 'values.yaml'
       - 'run-app.sh'
       - 'run-envoy.sh'
       - 'supervisor.ini'
       - 'Dockerfile'
-      - 'pyproject.toml'
       - '.github/workflows/build-gateway.yaml'
 jobs:
   build:
@@ -45,7 +41,7 @@ jobs:
           python-version: '3.12'
       - name: Render dynamic config (rendered/ is gitignored)
         run: |
-          pip install -e .
+          pip install -e ./gatewayctl
           gatewayctl render
       - name: Extract metadata (tags, labels) for Docker
         id: meta
