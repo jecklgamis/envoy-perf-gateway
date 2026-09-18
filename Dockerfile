@@ -1,12 +1,12 @@
 FROM envoyproxy/envoy:v1.39-latest
-RUN apt update -y && apt install -y curl dumb-init nodejs supervisor python3 python3-pip && \
-    pip3 install --no-cache-dir requests boto3 && \
+RUN apt update -y && apt install -y curl dumb-init supervisor python3 python3-pip && \
+    pip3 install --no-cache-dir requests boto3 flask && \
     rm -rf /var/lib/apt/lists/*
 
 COPY supervisor.ini /etc/supervisor.d/
 RUN mkdir -p /var/log/supervisor
 
-COPY app.js /
+COPY app.py /
 COPY run-app.sh /
 
 COPY run-envoy.sh /

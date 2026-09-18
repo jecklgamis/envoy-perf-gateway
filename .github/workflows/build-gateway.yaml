@@ -1,0 +1,71 @@
+name: Build Gateway
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - v*
+    paths:
+      - 'app.js'
+      - 'config/**'
+      - 'envoyctl/**'
+      - 'fetcher/**'
+      - 'templates/**'
+      - 'values.yaml'
+      - 'run-app.sh'
+      - 'run-envoy.sh'
+      - 'supervisor.ini'
+      - 'generate-ssl-certs.sh'
+      - 'Dockerfile'
+      - 'pyproject.toml'
+      - '.github/workflows/build-gateway.yaml'
+  pull_request:
+    types: [ opened, reopened ]
+    branches: [ main ]
+    paths:
+      - 'app.js'
+      - 'config/**'
+      - 'envoyctl/**'
+      - 'fetcher/**'
+      - 'templates/**'
+      - 'values.yaml'
+      - 'run-app.sh'
+      - 'run-envoy.sh'
+      - 'supervisor.ini'
+      - 'generate-ssl-certs.sh'
+      - 'Dockerfile'
+      - 'pyproject.toml'
+      - '.github/workflows/build-gateway.yaml'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v7
+      - name: Generate SSL certs
+        run: ./generate-ssl-certs.sh
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Render dynamic config (rendered/ is gitignored)
+        run: |
+          pip install -e .
+          envoyctl render
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ github.repository_owner }}/envoy-perf-gateway
+      - name: Log in to Docker Hub
+        if: ${{ github.event.repository.name == 'envoy-perf-gateway' && github.event_name != 'pull_request' }}
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: ${{ github.event.repository.name == 'envoy-perf-gateway' && github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

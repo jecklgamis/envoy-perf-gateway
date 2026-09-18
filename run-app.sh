@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-exec node /app.js 5050
+exec python3 /app.py 5050

@@ -1,0 +1,38 @@
+name: Build Config Server
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - v*
+    paths:
+      - 'config_server/**'
+      - '.github/workflows/build-config-server.yaml'
+  pull_request:
+    types: [ opened, reopened ]
+    branches: [ main ]
+    paths:
+      - 'config_server/**'
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v7
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ github.repository_owner }}/envoy-perf-gateway-config-server
+      - name: Log in to Docker Hub
+        if: ${{ github.event.repository.name == 'envoy-perf-gateway' && github.event_name != 'pull_request' }}
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v7
+        with:
+          context: config_server
+          push: ${{ github.event.repository.name == 'envoy-perf-gateway' && github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

@@ -41,6 +41,14 @@ def cli():
     """envoy-perf-gateway control CLI"""
 
 
+@cli.command("render")
+def render_cmd():
+    """Render rendered/cds.yaml and lds.yaml from values.yaml without
+    changing any backend. `rendered/` is gitignored (generated), so this is
+    the step CI runs before `docker build` on a fresh checkout."""
+    regenerate()
+
+
 @cli.command("add-backend")
 @click.option("--name", required=True, help="Cluster name, must be unique")
 @click.option("--host", required=True, help="Upstream host/IP")

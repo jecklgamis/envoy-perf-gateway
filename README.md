@@ -144,7 +144,7 @@ envoyctl remove-backend --name httpbin
 wiring a route (e.g. if you'll reference it from a hand-edited route later).
 Requests are matched with a path prefix and rewritten to `/` on the
 upstream. Everything not matched by a backend route falls through to the
-`default_app` cluster (the bundled Node.js echo server on :5050).
+`default_app` cluster (the bundled Flask echo server on :5050).
 
 ## Fault injection
 
