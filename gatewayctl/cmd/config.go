@@ -29,10 +29,21 @@ var configPathCmd = &cobra.Command{
 	},
 }
 
-var configViewCmd = &cobra.Command{
-	Use:   "view",
-	Short: "Print the current settings",
+var configGetCmd = &cobra.Command{
+	Use:   "get [key]",
+	Short: "Print one settings value, or all of them if no key is given",
+	Long: `Print one settings value, or all of them if no key is given.
+Recognized keys: mode, http.server-url, http.api-token, s3.bucket, s3.prefix.`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) == 1 {
+			value, ok := settingsGet(args[0])
+			if !ok {
+				return fmt.Errorf("unknown key %q (want: mode, http.server-url, http.api-token, s3.bucket, s3.prefix)", args[0])
+			}
+			fmt.Println(value)
+			return nil
+		}
 		if appSettings == (settings.Settings{}) {
 			fmt.Printf("No settings configured (%s does not exist or is empty)\n", configPath)
 			return nil
@@ -44,6 +55,23 @@ var configViewCmd = &cobra.Command{
 		fmt.Print(string(data))
 		return nil
 	},
+}
+
+func settingsGet(key string) (string, bool) {
+	switch key {
+	case "mode":
+		return appSettings.Mode, true
+	case "http.server-url":
+		return appSettings.HTTP.ServerURL, true
+	case "http.api-token":
+		return appSettings.HTTP.APIToken, true
+	case "s3.bucket":
+		return appSettings.S3.Bucket, true
+	case "s3.prefix":
+		return appSettings.S3.Prefix, true
+	default:
+		return "", false
+	}
 }
 
 var configSetCmd = &cobra.Command{
@@ -85,6 +113,6 @@ var configSetCmd = &cobra.Command{
 }
 
 func init() {
-	configCmd.AddCommand(configPathCmd, configViewCmd, configSetCmd)
+	configCmd.AddCommand(configPathCmd, configGetCmd, configSetCmd)
 	rootCmd.AddCommand(configCmd)
 }

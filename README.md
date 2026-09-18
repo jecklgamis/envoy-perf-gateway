@@ -124,7 +124,8 @@ gatewayctl config set mode s3
 gatewayctl config set s3.bucket my-bucket
 gatewayctl config set s3.prefix envoy-perf-gateway/
 
-gatewayctl config view    # see what's configured
+gatewayctl config get              # see everything configured
+gatewayctl config get mode         # or just one value
 gatewayctl config set mode ""   # back to no auto-push
 ```
 
