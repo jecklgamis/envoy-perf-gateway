@@ -13,13 +13,10 @@ Nothing to build - pulls the published Docker images and a pre-built
 `gatewayctl` binary from the
 [releases page](https://github.com/jecklgamis/envoy-perf-gateway/releases).
 
-**1. Run the gateway, in its own terminal, already pointed at
-config_server** - it's fine that config_server isn't up yet: the gateway
-ships with a working baked-in default (a `default_app` echo backend), so
-it serves traffic immediately regardless, while its fetcher quietly
-retries in the background until config_server appears. Foreground on
-purpose, so you see its logs directly - open a new terminal for each step
-from here on rather than backgrounding these:
+**1. Run the gateway, already pointed at config_server** (fine if
+config_server isn't up yet - it serves a baked-in default in the
+meantime). In its own terminal, foreground on purpose - use a new
+terminal for each step from here on:
 
 ```bash
 docker pull jecklgamis/envoy-perf-gateway:latest
