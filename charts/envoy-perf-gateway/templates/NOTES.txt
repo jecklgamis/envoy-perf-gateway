@@ -1,0 +1,46 @@
+envoy-perf-gateway has been deployed.
+
+Gateway Service: {{ include "envoy-perf-gateway.gateway.fullname" . }}
+  http:  port {{ .Values.gateway.service.httpPort }}
+  admin: port {{ .Values.gateway.service.adminPort }}
+{{- if and .Values.configServer.enabled (eq .Values.configSourceKind "http") }}
+
+Config server Service: {{ include "envoy-perf-gateway.configServer.fullname" . }}
+  http: port {{ .Values.configServer.service.port }}
+{{- end }}
+
+1. Reach the gateway's HTTP port:
+
+   kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "envoy-perf-gateway.gateway.fullname" . }} 8080:{{ .Values.gateway.service.httpPort }}
+   curl http://localhost:8080/
+
+2. Manage backends with gatewayctl. Point it at values.yaml, then push
+   through the same distribution mode configured here
+   ({{ .Values.configSourceKind }}):
+
+   gatewayctl add-backend --name httpbin --host httpbin.org --port 443 --tls --route-prefix /httpbin/
+{{- if eq .Values.configSourceKind "http" }}
+   gatewayctl config set mode http
+   gatewayctl config set http.server-url http://localhost:8090   # after port-forwarding the config server below
+{{- else }}
+   gatewayctl config set mode s3
+   gatewayctl config set s3.bucket {{ .Values.gateway.s3.bucket }}
+{{- end }}
+{{- if and .Values.configServer.enabled (eq .Values.configSourceKind "http") }}
+
+   kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "envoy-perf-gateway.configServer.fullname" . }} 8090:{{ .Values.configServer.service.port }}
+{{- end }}
+
+3. gatewayctl fault abort/delay/reset now distribute through the same
+   pipeline as backends (values.yaml -> config server/S3 -> every
+   replica's fetcher), so they apply consistently across
+   gateway.replicaCount replicas and survive pod restarts. Expect the
+   change to take effect on the fetcher's next poll
+   (CONFIG_POLL_INTERVAL_SECONDS, 15s by default), not instantly.
+
+   For a sub-second, single-pod override instead (in-memory only, lost on
+   that pod's next restart), hit its admin API directly - not exposed as
+   a Service by this chart, so port-forward the pod itself:
+
+   kubectl port-forward -n {{ .Release.Namespace }} <gateway-pod-name> 9901:{{ .Values.gateway.service.adminPort }}
+   curl -X POST "http://localhost:9901/runtime_modify?fault.http.abort.abort_percent.httpbin=100&fault.http.abort.http_status.httpbin=503"

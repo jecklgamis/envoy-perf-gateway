@@ -1,0 +1,102 @@
+# Default values for envoy-perf-gateway.
+
+# -- Distribution mode shared by both components: "http" (talk to the
+# bundled config server) or "s3" (poll an S3 bucket instead). "http" also
+# determines whether the configServer sub-component is deployed.
+configSourceKind: http
+
+gateway:
+  image:
+    repository: jecklgamis/envoy-perf-gateway
+    tag: ""  # defaults to .Chart.AppVersion
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  service:
+    type: ClusterIP
+    httpPort: 8080
+    adminPort: 9901
+
+  # -- Required when configSourceKind=http. Defaults to the in-cluster
+  # config server Service created by this chart when configServer.enabled
+  # is true; set explicitly to point at an external one instead.
+  configSourceUrl: ""
+
+  # -- Bearer token sent to the config server. Required when the config
+  # server has apiToken set. Prefer configApiTokenExistingSecret in
+  # anything beyond local/dev use.
+  configApiToken: ""
+  # -- Existing Secret {name, key} to source the token from instead of
+  # configApiToken.
+  configApiTokenExistingSecret: {}
+  # name: ""
+  # key: ""
+
+  s3:
+    bucket: ""
+    prefix: "envoy-perf-gateway/"
+    region: ""
+    # -- Existing Secret providing AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY,
+    # e.g. for clusters without IRSA/workload identity.
+    existingSecret: ""
+
+  resources: {}
+  # limits:
+  #   cpu: 500m
+  #   memory: 256Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+  podSecurityContext: {}
+  securityContext: {}
+
+configServer:
+  # -- Deploy the bundled config server. Ignored (treated as false) unless
+  # configSourceKind is "http".
+  enabled: true
+
+  image:
+    repository: jecklgamis/envoy-perf-gateway-config-server
+    tag: ""  # defaults to .Chart.AppVersion
+    pullPolicy: IfNotPresent
+
+  replicaCount: 1
+
+  service:
+    type: ClusterIP
+    port: 8090
+
+  # -- Required; the server refuses to start without it. Prefer
+  # apiTokenExistingSecret in anything beyond local/dev use.
+  apiToken: ""
+  # -- Existing Secret {name, key} to source the token from instead of
+  # apiToken.
+  apiTokenExistingSecret: {}
+  # name: ""
+  # key: ""
+
+  persistence:
+    # -- Persists uploaded cds.yaml/lds.yaml across restarts. Disable only
+    # for ephemeral/dev use - a pod restart with this off loses pushed
+    # config until the next add-backend/remove-backend.
+    enabled: true
+    size: 1Gi
+    storageClassName: ""
+    accessModes:
+      - ReadWriteOnce
+    existingClaim: ""
+
+  resources: {}
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+  podSecurityContext: {}
+  securityContext: {}

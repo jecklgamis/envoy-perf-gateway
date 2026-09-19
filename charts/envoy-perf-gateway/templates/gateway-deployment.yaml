@@ -1,0 +1,104 @@
+{{- if and (eq .Values.configSourceKind "s3") (not .Values.gateway.s3.bucket) }}
+{{- fail "gateway.s3.bucket is required when configSourceKind=s3" }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "envoy-perf-gateway.gateway.fullname" . }}
+  labels:
+    {{- include "envoy-perf-gateway.gateway.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.gateway.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "envoy-perf-gateway.gateway.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "envoy-perf-gateway.gateway.labels" . | nindent 8 }}
+      {{- with .Values.gateway.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.gateway.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: gateway
+          image: "{{ .Values.gateway.image.repository }}:{{ .Values.gateway.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.gateway.image.pullPolicy }}
+          {{- with .Values.gateway.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.gateway.service.httpPort }}
+              protocol: TCP
+            - name: admin
+              containerPort: {{ .Values.gateway.service.adminPort }}
+              protocol: TCP
+          env:
+            - name: CONFIG_SOURCE_KIND
+              value: {{ .Values.configSourceKind | quote }}
+            {{- if eq .Values.configSourceKind "http" }}
+            - name: CONFIG_SOURCE_URL
+              value: {{ .Values.gateway.configSourceUrl | default (include "envoy-perf-gateway.configServer.url" .) | quote }}
+            - name: CONFIG_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  {{- if .Values.gateway.configApiTokenExistingSecret.name }}
+                  name: {{ .Values.gateway.configApiTokenExistingSecret.name }}
+                  key: {{ .Values.gateway.configApiTokenExistingSecret.key }}
+                  {{- else }}
+                  name: {{ include "envoy-perf-gateway.gateway.fullname" . }}
+                  key: config-api-token
+                  {{- end }}
+            {{- else }}
+            - name: CONFIG_S3_BUCKET
+              value: {{ .Values.gateway.s3.bucket | quote }}
+            - name: CONFIG_S3_PREFIX
+              value: {{ .Values.gateway.s3.prefix | quote }}
+            {{- if .Values.gateway.s3.region }}
+            - name: AWS_REGION
+              value: {{ .Values.gateway.s3.region | quote }}
+            {{- end }}
+            {{- if .Values.gateway.s3.existingSecret }}
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.gateway.s3.existingSecret }}
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.gateway.s3.existingSecret }}
+                  key: AWS_SECRET_ACCESS_KEY
+            {{- end }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: admin
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: admin
+          {{- with .Values.gateway.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.gateway.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.gateway.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.gateway.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
