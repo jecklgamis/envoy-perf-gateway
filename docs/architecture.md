@@ -30,16 +30,22 @@ Fault injection (`gatewayctl fault ...`) rides this same pipeline instead
 of a separate one. Fault state lives in `values.yaml`'s `faults` map,
 renders to a flat key/value `runtime.yaml`, and distributes like any other
 file above. Envoy doesn't read that manifest directly, though: its
-`layered_runtime` has a `disk_layer` (`config/envoy.yaml`) that expects one
-regular file per runtime key inside a directory, so the fetcher expands
-`runtime.yaml` into `/etc/envoy/dynamic/runtime/current/<key>` files -
-writing changed keys and removing ones no longer in the manifest - rather
-than writing it as a single file the way it does for `cds.yaml`/`lds.yaml`.
-This is what lets multiple gateway replicas converge on the same fault
-state and survive restarts, instead of a fault existing only in one Envoy
-process's in-memory admin layer. A `layered_runtime.admin` layer still sits
-above the disk layer, so a direct `POST /runtime_modify` against a single
-pod's admin API still works for instant, ad-hoc overrides.
+`layered_runtime` has a `disk_layer` (`config/envoy.yaml`) whose
+`symlink_root` must itself be a symlink Envoy watches for atomic
+replacement - the same scheme Kubernetes uses for ConfigMap volumes. It
+does **not** reload on files simply changing inside a directory it's
+already watching, which is what a straightforward "write one file per
+key, in place" implementation does; that was tried first and silently
+never took effect (confirmed via the admin API's `/runtime` endpoint: the
+layer registered, but `entries` stayed permanently empty). The fetcher
+instead writes each poll's keys into a fresh `data-<digest>` directory and
+atomically swaps a `current` symlink to point at it, deleting the
+previous one. This is what lets multiple gateway replicas converge on the
+same fault state and survive restarts, instead of a fault existing only
+in one Envoy process's in-memory admin layer. A `layered_runtime.admin`
+layer still sits above the disk layer, so a direct `POST /runtime_modify`
+against a single pod's admin API still works for instant, ad-hoc
+overrides, in-memory only, lost on that pod's next restart.
 
 ## Config Distribution
 
