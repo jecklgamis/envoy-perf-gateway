@@ -507,6 +507,20 @@ curl -H "Host: frontend-b.test.local" http://localhost:8080/api/anything</code><
 <pre><code>gatewayctl add-backend --name serverprobes --host www.serverprobes.com --port 443 --tls \
   --route-prefix /serverprobes/ --host-header www.serverprobes.com</code></pre>
       <div class="note"><code>--host</code> (and TLS SNI) control where and how Envoy connects to the upstream; <code>--host-header</code> controls what the upstream actually sees in the request itself. Without it, the upstream receives the gateway's own inbound <code>Host</code> header unchanged - fine for a backend like <code>httpbin.org</code> that doesn't validate it, but rejected outright (<code>421 Misdirected Request</code>) by anything that does.</div>
+
+      <h3>Path Prefix vs. Virtual Host: which to use</h3>
+      <p>The right choice isn't really "API vs. frontend" - it's whether the backend assumes it owns the whole path space at its own origin.</p>
+      <p><strong>Use <code>--route-prefix</code></strong> for backends whose responses are self-contained - a JSON API is the classic case. Nothing in the response implies a follow-up request to some other absolute path on the same origin, so proxying it under a prefix (<code>/httpbin/get</code> &rarr; <code>httpbin.org/get</code>) works cleanly.</p>
+      <p><strong>Use <code>--domain</code></strong> for anything built assuming it's served at its origin's root - most real frontends. Bundlers emit absolute asset paths (<code>/assets/index.js</code>), and pages reference them the same way regardless of what prefix you proxied the HTML through:</p>
+<pre><code><span class="cmt"># this only rewrites the top-level HTML request - the page's own
+# /assets/*.js and /assets/*.css requests miss the prefix entirely and
+# fall through to default_app instead of the real files</span>
+gatewayctl add-backend --name some-spa --host some-spa.example.com --port 443 --tls \
+  --route-prefix /some-spa/ --host-header some-spa.example.com
+curl https://your-gateway/some-spa/          <span class="cmt"># 200, real HTML</span>
+curl https://your-gateway/assets/index.js    <span class="cmt"># hits default_app, not the real JS</span></code></pre>
+      <p>With <code>--domain</code> instead, the app sees requests exactly as if it owned the whole domain, so its absolute paths resolve correctly with no rewriting needed. The tradeoff: you need a dedicated hostname pointed at the gateway per app (and, behind an Ingress like this project's Helm charts use, that hostname needs its own DNS record and TLS cert, since TLS terminates at the Ingress rather than at Envoy itself).</p>
+      <div class="warn">Proxying a real third-party frontend under a prefix has failure modes beyond broken asset paths, too: any client-side JS making <code>fetch</code>/XHR calls to the backend's <em>other</em> origins (e.g. a separate API or CDN subdomain) will be blocked by the browser's CORS policy, since those origins won't have allowlisted your gateway's domain - the browser sees the page's origin as your gateway, not the real site. Cookies scoped to the original domain also won't be sent, since the domain the browser sees no longer matches, breaking anything that depends on existing session/auth state.</div>
     </section>
 
     <section id="timeouts">
