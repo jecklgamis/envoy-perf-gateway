@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -19,6 +20,7 @@ var (
 	abHostRewrite    string
 	abConnectTimeout string
 	abTimeout        string
+	abForce          bool
 )
 
 var addBackendCmd = &cobra.Command{
@@ -27,6 +29,24 @@ var addBackendCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := validateName("name", abName); err != nil {
 			return err
+		}
+
+		// A missing values.yaml with a mode configured is the classic
+		// wrong-directory/wrong-machine trap: config.Load silently treats
+		// it as an empty backend list, so this push would look identical
+		// to a legitimate first backend, but could actually be about to
+		// overwrite a remote config that already has other backends on
+		// it with just this one. --force is required to proceed anyway
+		// (fine for a genuinely fresh deployment, or scripted use).
+		if !abForce && resolveMode() != "" {
+			if _, statErr := os.Stat(valuesPath); os.IsNotExist(statErr) {
+				return fmt.Errorf(
+					"%s doesn't exist yet, but a mode is configured (%s) - pushing now could "+
+						"silently overwrite a remote config that already has other backends on it "+
+						"with just this one. Run 'gatewayctl list-backends --remote' to check first, "+
+						"or pass --force if this is genuinely a fresh deployment",
+					valuesPath, resolveMode())
+			}
 		}
 
 		v, err := config.Load(valuesPath)
@@ -101,6 +121,8 @@ func init() {
 			"gateway's own inbound Host header through unchanged.")
 	addBackendCmd.Flags().StringVar(&abConnectTimeout, "connect-timeout", "5s", "")
 	addBackendCmd.Flags().StringVar(&abTimeout, "timeout", "15s", "")
+	addBackendCmd.Flags().BoolVar(&abForce, "force", false,
+		"Skip the missing-values.yaml safety check (see its error message for why it exists).")
 
 	_ = addBackendCmd.MarkFlagRequired("name")
 	_ = addBackendCmd.MarkFlagRequired("host")

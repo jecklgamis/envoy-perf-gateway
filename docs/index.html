@@ -477,6 +477,8 @@ gatewayctl remove-backend --name httpbin</code></pre>
 
       <div class="note">Backend names (<code>--name</code>) are restricted to letters, digits, <code>-</code>, and <code>_</code>. This isn't arbitrary — the name becomes part of an Envoy runtime key that gets turned into a filesystem path on the gateway, so it's validated up front.</div>
 
+      <div class="warn"><code>add-backend</code> refuses to run if local <code>values.yaml</code> doesn't exist yet but a mode is configured, unless you pass <code>--force</code>. This guards the wrong-directory/wrong-machine trap: a missing file looks identical to a legitimate first backend, but pushing it would silently overwrite a remote config that already has other backends on it with just this one. Run <code>gatewayctl list-backends --remote</code> first to check what's actually live, or pass <code>--force</code> if it's genuinely a fresh deployment. <code>remove-backend</code> doesn't need this - it always fails safely on a missing file, since "no backend named X" is caught before anything is ever saved or pushed.</div>
+
       <h3>Checking the ground truth</h3>
       <p><code>list-backends</code> only ever reads local <code>values.yaml</code> by default — it never talks to the network. If a push failed silently, or you're running <code>gatewayctl</code> from a different machine or directory than whoever last pushed, local <code>values.yaml</code> can drift from what's actually live. Add <code>--remote</code> to fetch the config server's (or S3's) current <code>cds.yaml</code>/<code>lds.yaml</code> and print the same table, reconstructed from what's actually live instead of local state:</p>
 <pre><code>gatewayctl list-backends --remote
