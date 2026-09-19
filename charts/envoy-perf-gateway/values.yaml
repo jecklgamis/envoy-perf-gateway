@@ -8,7 +8,7 @@
 gateway:
   image:
     repository: jecklgamis/envoy-perf-gateway
-    tag: ""  # defaults to .Chart.AppVersion
+    tag: "main"
     pullPolicy: IfNotPresent
 
   replicaCount: 1
