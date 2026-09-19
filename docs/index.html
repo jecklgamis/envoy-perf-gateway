@@ -477,15 +477,19 @@ gatewayctl remove-backend --name httpbin</code></pre>
 
       <div class="note">Backend names (<code>--name</code>) are restricted to letters, digits, <code>-</code>, and <code>_</code>. This isn't arbitrary — the name becomes part of an Envoy runtime key that gets turned into a filesystem path on the gateway, so it's validated up front.</div>
 
-      <h3>Checking the ground truth with <code>fetch</code></h3>
-      <p><code>list-backends</code> only ever reads local <code>values.yaml</code> — it never talks to the network. If a push failed silently, or you're running <code>gatewayctl</code> from a different machine or directory than whoever last pushed, local <code>values.yaml</code> can drift from what's actually live. <code>gatewayctl fetch</code> downloads the config server's (or S3's) current <code>cds.yaml</code>, <code>lds.yaml</code>, and <code>runtime.yaml</code> - the same files the in-container fetcher polls - into <code>--rendered-dir</code>, so you can inspect exactly what every gateway replica is actually running:</p>
+      <h3>Checking the ground truth</h3>
+      <p><code>list-backends</code> only ever reads local <code>values.yaml</code> by default — it never talks to the network. If a push failed silently, or you're running <code>gatewayctl</code> from a different machine or directory than whoever last pushed, local <code>values.yaml</code> can drift from what's actually live. Add <code>--remote</code> to fetch the config server's (or S3's) current <code>cds.yaml</code>/<code>lds.yaml</code> and print the same table, reconstructed from what's actually live instead of local state:</p>
+<pre><code>gatewayctl list-backends --remote
+<span class="cmt"># httpbin              httpbin.org:443  tls        /httpbin/
+# serverprobes         www.serverprobes.com:443  tls        /serverprobes/</span></code></pre>
+      <p>For the raw underlying files instead of the summarized table, <code>gatewayctl fetch</code> downloads <code>cds.yaml</code>, <code>lds.yaml</code>, and <code>runtime.yaml</code> - the same files the in-container fetcher polls - into <code>--rendered-dir</code>:</p>
 <pre><code>gatewayctl fetch
 <span class="cmt"># Fetched cds.yaml -> rendered/cds.yaml (3098 bytes)
 # Fetched lds.yaml -> rendered/lds.yaml (7802 bytes)
 # Fetched runtime.yaml -> rendered/runtime.yaml (3 bytes)</span>
 
 cat rendered/cds.yaml   <span class="cmt"># every live cluster, straight from the source</span></code></pre>
-      <p>Uses whichever mode is configured (<code>gatewayctl config set mode http|s3</code>, or <code>CONFIG_SOURCE_KIND</code>), the same way <code>push-http</code>/<code>push-s3</code> do. A file that's never been pushed is skipped with a message rather than treated as an error.</p>
+      <p>Both use whichever mode is configured (<code>gatewayctl config set mode http|s3</code>, or <code>CONFIG_SOURCE_KIND</code>), the same way <code>push-http</code>/<code>push-s3</code> do. A file that's never been pushed is skipped with a message rather than treated as an error.</p>
     </section>
 
     <section id="routing">

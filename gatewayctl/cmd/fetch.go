@@ -30,88 +30,95 @@ http|s3, or CONFIG_SOURCE_KIND), the same way push-http/push-s3 do.`,
 		if err := os.MkdirAll(renderedDir, 0o755); err != nil {
 			return err
 		}
-		switch mode := resolveMode(); mode {
-		case "":
-			return fmt.Errorf("no mode configured (gatewayctl config set mode http|s3, or CONFIG_SOURCE_KIND)")
-		case "http":
-			return fetchHTTPFiles(resolveServerURL(), resolveAPIToken())
-		case "s3":
-			bucket := resolveS3Bucket()
-			if bucket == "" {
-				return fmt.Errorf("mode=s3 requires CONFIG_S3_BUCKET or settings file s3.bucket to be set")
+		for _, filename := range []string{"cds.yaml", "lds.yaml", "runtime.yaml"} {
+			body, found, err := fetchRemoteFile(filename)
+			if err != nil {
+				return err
 			}
-			return fetchS3Files(bucket, resolveS3Prefix())
-		default:
-			return fmt.Errorf("unsupported mode: %s (want \"http\" or \"s3\")", mode)
+			if !found {
+				fmt.Printf("%s not found on the remote source yet (nothing pushed) - skipping\n", filename)
+				continue
+			}
+			if err := writeLocal(filename, body); err != nil {
+				return err
+			}
 		}
+		return nil
 	},
 }
 
-func fetchHTTPFiles(serverURL, apiToken string) error {
-	serverURL = strings.TrimRight(serverURL, "/")
-	client := &http.Client{Timeout: 10 * time.Second}
-
-	for _, filename := range []string{"cds.yaml", "lds.yaml", "runtime.yaml"} {
-		url := fmt.Sprintf("%s/config/%s", serverURL, filename)
-		req, err := http.NewRequest(http.MethodGet, url, nil)
-		if err != nil {
-			return err
+// fetchRemoteFile downloads filename from whichever mode is configured.
+// found is false (with a nil error) when the remote genuinely has nothing
+// at that name yet - not pushed, not a failure - callers decide how to
+// report that; any other problem (bad token, wrong mode, network error)
+// comes back as a non-nil error.
+func fetchRemoteFile(filename string) ([]byte, bool, error) {
+	switch mode := resolveMode(); mode {
+	case "":
+		return nil, false, fmt.Errorf("no mode configured (gatewayctl config set mode http|s3, or CONFIG_SOURCE_KIND)")
+	case "http":
+		return fetchHTTPFile(resolveServerURL(), resolveAPIToken(), filename)
+	case "s3":
+		bucket := resolveS3Bucket()
+		if bucket == "" {
+			return nil, false, fmt.Errorf("mode=s3 requires CONFIG_S3_BUCKET or settings file s3.bucket to be set")
 		}
-		if apiToken != "" {
-			req.Header.Set("Authorization", "Bearer "+apiToken)
-		}
-		resp, err := client.Do(req)
-		if err != nil {
-			return fmt.Errorf("fetching %s: %w", url, err)
-		}
-		body, readErr := io.ReadAll(resp.Body)
-		resp.Body.Close()
-		if readErr != nil {
-			return fmt.Errorf("reading %s: %w", url, readErr)
-		}
-		if resp.StatusCode == http.StatusNotFound {
-			fmt.Printf("%s not found on the config server yet (nothing pushed) - skipping\n", filename)
-			continue
-		}
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("fetching %s: %s: %s", url, resp.Status, strings.TrimSpace(string(body)))
-		}
-		if err := writeLocal(filename, body); err != nil {
-			return err
-		}
+		return fetchS3File(bucket, resolveS3Prefix(), filename)
+	default:
+		return nil, false, fmt.Errorf("unsupported mode: %s (want \"http\" or \"s3\")", mode)
 	}
-	return nil
 }
 
-func fetchS3Files(bucket, prefix string) error {
+func fetchHTTPFile(serverURL, apiToken, filename string) ([]byte, bool, error) {
+	url := fmt.Sprintf("%s/config/%s", strings.TrimRight(serverURL, "/"), filename)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, false, err
+	}
+	if apiToken != "" {
+		req.Header.Set("Authorization", "Bearer "+apiToken)
+	}
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, false, fmt.Errorf("fetching %s: %w", url, err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, false, fmt.Errorf("reading %s: %w", url, err)
+	}
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, false, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, false, fmt.Errorf("fetching %s: %s: %s", url, resp.Status, strings.TrimSpace(string(body)))
+	}
+	return body, true, nil
+}
+
+func fetchS3File(bucket, prefix, filename string) ([]byte, bool, error) {
 	ctx := context.Background()
 	cfg, err := awsconfig.LoadDefaultConfig(ctx)
 	if err != nil {
-		return fmt.Errorf("loading AWS config: %w", err)
+		return nil, false, fmt.Errorf("loading AWS config: %w", err)
 	}
 	client := s3.NewFromConfig(cfg)
-	prefix = strings.TrimLeft(prefix, "/")
+	key := strings.TrimLeft(prefix, "/") + filename
 
-	for _, filename := range []string{"cds.yaml", "lds.yaml", "runtime.yaml"} {
-		key := prefix + filename
-		out, err := client.GetObject(ctx, &s3.GetObjectInput{Bucket: &bucket, Key: &key})
-		if err != nil {
-			if strings.Contains(err.Error(), "NoSuchKey") {
-				fmt.Printf("%s not found in s3://%s/%s yet (nothing pushed) - skipping\n", filename, bucket, key)
-				continue
-			}
-			return fmt.Errorf("fetching s3://%s/%s: %w", bucket, key, err)
+	out, err := client.GetObject(ctx, &s3.GetObjectInput{Bucket: &bucket, Key: &key})
+	if err != nil {
+		if strings.Contains(err.Error(), "NoSuchKey") {
+			return nil, false, nil
 		}
-		body, err := io.ReadAll(out.Body)
-		out.Body.Close()
-		if err != nil {
-			return fmt.Errorf("reading s3://%s/%s: %w", bucket, key, err)
-		}
-		if err := writeLocal(filename, body); err != nil {
-			return err
-		}
+		return nil, false, fmt.Errorf("fetching s3://%s/%s: %w", bucket, key, err)
 	}
-	return nil
+	defer out.Body.Close()
+	body, err := io.ReadAll(out.Body)
+	if err != nil {
+		return nil, false, fmt.Errorf("reading s3://%s/%s: %w", bucket, key, err)
+	}
+	return body, true, nil
 }
 
 func writeLocal(filename string, body []byte) error {
