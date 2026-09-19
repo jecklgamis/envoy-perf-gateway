@@ -48,13 +48,6 @@ chmod +x gatewayctl
 Other platforms: swap the suffix for `gatewayctl-darwin-amd64`,
 `gatewayctl-linux-amd64`, or `gatewayctl-linux-arm64`.
 
-`:latest` tracks the most recent *tagged release* (published by
-[release.yaml](.github/workflows/release.yaml) on a `v*` tag) - not the
-main branch. If you want main's bleeding edge instead, both images also
-publish a `:main` tag on every push, via
-[build-gateway.yaml](.github/workflows/build-gateway.yaml)/
-[build-config-server.yaml](.github/workflows/build-config-server.yaml).
-
 **4. Point `gatewayctl` at config_server** - this saves the mode, URL, and
 token to `gatewayctl`'s settings file (`~/.config/gatewayctl/config.yaml`
 by default) so `add-backend`/`remove-backend` push automatically from here
