@@ -106,7 +106,7 @@ See [docs/architecture.md](docs/architecture.md) for how config flows from
 `gatewayctl` through to a running Envoy, and why the HTTP/S3 distribution
 split exists.
 
-## Running from source (HTTP source)
+## Running From Source (HTTP Source)
 
 ```bash
 make -C config_server up
@@ -117,7 +117,7 @@ Both default `API_TOKEN`/`CONFIG_API_TOKEN` to `default` if you don't
 export your own - fine on localhost, export a real value for anything
 beyond that.
 
-## Running from source (S3 source)
+## Running From Source (S3 Source)
 
 ```bash
 make -C gatewayctl install
@@ -137,7 +137,7 @@ is the human-authored source of truth and is a good candidate to `git commit`
 before each render/push, so backend changes have real history on both
 sides.
 
-## Managing backends
+## Managing Backends
 
 `gatewayctl list-backends` and `gatewayctl remove-backend --name <name>`
 round out `add-backend` from the Quickstart.
@@ -149,7 +149,7 @@ rewritten to `/` on the upstream. Everything not matched by a backend
 route falls through to the `default_app` cluster (the bundled Go echo
 server on :5050).
 
-### Frontend/backend pairs (domain-based routing)
+### Frontend/Backend Pairs (Domain-Based Routing)
 
 Pair a backend with a specific frontend `Host` header instead of (or in
 addition to) a path prefix, via `--domain`. Each domain gets its own Envoy
@@ -175,7 +175,7 @@ prefix under the domain is routed there (rewritten to `/`), same as the
 path-only case. Backends with neither `--domain` nor `--route-prefix` set
 still register a cluster with no route at all.
 
-## Fault injection
+## Fault Injection
 
 Every route - each `add-backend`, plus the `default_app` fallback - gets
 its own independently-toggleable fault injection, isolated via a unique
