@@ -7,6 +7,25 @@ Envoy as a front door for perf and chaos testing. Add and remove backends
 with a CLI, toggle fault injection at runtime, no restart, no full xDS
 control plane.
 
+## Features
+
+- **Per-backend fault isolation** - inject aborts and delays into one
+  backend's traffic without touching any other route. No blast radius,
+  no shared kill switch.
+- **Live toggling, zero restarts** - flip fault injection on and off
+  against a running gateway via Envoy's admin API. No redeploy, no
+  config reload, no dropped connections.
+- **No xDS control plane to run** - dynamic backends via filesystem
+  CDS/LDS and inotify hot-reload. Skip the usual xDS server, gRPC
+  streams, and cluster bootstrap ceremony.
+- **One CLI for the whole workflow** - `gatewayctl` adds/removes
+  backends, pushes config, and drives fault injection, all from one
+  binary with no YAML hand-editing.
+- **Pluggable config source** - push backend config over HTTP or
+  straight to S3, pick whichever fits your test environment.
+- **Ready in one command** - pre-built Docker images and CLI binaries
+  published on every release, nothing to build to get started.
+
 ## Quickstart
 
 Nothing to build - pulls the published Docker images and a pre-built
