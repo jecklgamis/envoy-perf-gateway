@@ -63,6 +63,12 @@ chmod +x gatewayctl
 Other platforms: `gatewayctl-darwin-amd64`, `gatewayctl-linux-amd64`,
 `gatewayctl-linux-arm64`.
 
+Alternatively, install it with Go:
+
+```bash
+go install github.com/jecklgamis/envoy-perf-gateway/gatewayctl@latest
+```
+
 **4. Point the CLI at the config server.** This is saved to
 `~/.config/gatewayctl/config.yaml`, so subsequent `add-backend` and
 `remove-backend` commands push configuration automatically:
