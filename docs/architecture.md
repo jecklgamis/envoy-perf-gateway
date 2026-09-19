@@ -29,10 +29,10 @@ missing or partial file mid-swap.
 ## Config Distribution
 
 Two distribution mechanisms are supported, selected by the
-`CONFIG_SOURCE_KIND` environment variable on the container. Both are
-cloud-agnostic (no dependency on a specific provider) and both require an
-explicit push after each change; `gatewayctl` never touches the container
-or the fetcher's source directly, only the distribution endpoint.
+`CONFIG_SOURCE_KIND` environment variable on the container. Both require
+an explicit push after each change; `gatewayctl` never touches the
+container or the fetcher's source directly, only the distribution
+endpoint.
 
 **`http`**
 
@@ -41,12 +41,13 @@ The fetcher polls `config_server`, a small Go HTTP service with its own
 deployable as its own service. `gatewayctl push-http` uploads
 `rendered/cds.yaml`/`lds.yaml` to it over HTTP POST. The server does not
 need to be colocated with `gatewayctl`; anywhere reachable over HTTP
-works, which is what makes this option cloud-agnostic (no S3/GCS/Azure
-dependency at all). Access is optionally gated by `API_TOKEN` (see the
-main README).
+works, which is what makes this option cloud-agnostic (no dependency on
+AWS or any other specific provider). Access is optionally gated by
+`API_TOKEN` (see the main README).
 
 **`s3`**
 
-The fetcher polls an S3 bucket. `gatewayctl push-s3` uploads `rendered/`
-there instead. This is useful once configuration needs to be shared
-across multiple gateway instances via a durable, versioned store.
+The fetcher polls an S3 bucket, so this mode is AWS-specific (or requires
+an S3-compatible API). `gatewayctl push-s3` uploads `rendered/` there
+instead. This is useful once configuration needs to be shared across
+multiple gateway instances via a durable, versioned store.
