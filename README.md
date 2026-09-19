@@ -114,16 +114,6 @@ See [docs/architecture.md](docs/architecture.md) for how configuration
 flows from the Gateway CLI through to a running Envoy instance, and the
 rationale for the HTTP/S3 distribution split.
 
-## Installing The CLI
-
-Download a pre-built binary from the
-[releases page](https://github.com/jecklgamis/envoy-perf-gateway/releases),
-or install it with Go:
-
-```bash
-go install github.com/jecklgamis/envoy-perf-gateway/gatewayctl@latest
-```
-
 ## Running From Source
 
 **HTTP source** (each command runs in the foreground - use a separate
