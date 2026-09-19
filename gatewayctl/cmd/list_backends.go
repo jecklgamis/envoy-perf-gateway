@@ -2,13 +2,10 @@ package cmd
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 
 	"github.com/jecklgamis/envoy-perf-gateway/gatewayctl/internal/config"
-	ec "github.com/jecklgamis/envoy-perf-gateway/gatewayctl/internal/envoyconfig"
 )
 
 var lbRemote bool
@@ -61,30 +58,13 @@ func listLocalBackends() error {
 // push that failed silently, or values.yaml here not being the one that
 // was last used to push), which is exactly the drift this is for.
 func listRemoteBackends() error {
-	cdsBody, found, err := fetchRemoteFile("cds.yaml")
+	cds, lds, found, err := fetchRemoteCDSAndLDS()
 	if err != nil {
 		return err
 	}
 	if !found {
-		fmt.Println("No cds.yaml on the remote source yet (nothing pushed)")
+		fmt.Println("No config on the remote source yet (nothing pushed)")
 		return nil
-	}
-	ldsBody, found, err := fetchRemoteFile("lds.yaml")
-	if err != nil {
-		return err
-	}
-	if !found {
-		fmt.Println("No lds.yaml on the remote source yet (nothing pushed)")
-		return nil
-	}
-
-	var cds ec.CDS
-	if err := yaml.Unmarshal(cdsBody, &cds); err != nil {
-		return fmt.Errorf("decoding remote cds.yaml: %w", err)
-	}
-	var lds ec.LDS
-	if err := yaml.Unmarshal(ldsBody, &lds); err != nil {
-		return fmt.Errorf("decoding remote lds.yaml: %w", err)
 	}
 
 	printed := false
@@ -102,42 +82,23 @@ func listRemoteBackends() error {
 		if c.TransportSocket != nil {
 			tls = "tls"
 		}
-		fmt.Printf("%-20s %s:%-6d %-10s %s\n", c.Name, host, port, tls, remoteRouteDescription(lds, c.Name))
+		route := "(no route, cluster only)"
+		if info, ok := findRemoteRoute(lds, c.Name); ok {
+			switch {
+			case info.Domain != "" && info.RoutePrefix != "":
+				route = info.Domain + info.RoutePrefix
+			case info.Domain != "":
+				route = info.Domain
+			case info.RoutePrefix != "":
+				route = info.RoutePrefix
+			}
+		}
+		fmt.Printf("%-20s %s:%-6d %-10s %s\n", c.Name, host, port, tls, route)
 	}
 	if !printed {
 		fmt.Println("No backends configured")
 	}
 	return nil
-}
-
-// remoteRouteDescription finds the route (if any) pointed at clusterName
-// across every virtual host in lds and formats it the same way
-// listLocalBackends formats a Backend's domain/route-prefix.
-func remoteRouteDescription(lds ec.LDS, clusterName string) string {
-	for _, listener := range lds.Resources {
-		for _, fc := range listener.FilterChains {
-			for _, f := range fc.Filters {
-				for _, vh := range f.TypedConfig.RouteConfig.VirtualHosts {
-					catchAll := len(vh.Domains) == 1 && vh.Domains[0] == "*"
-					for _, r := range vh.Routes {
-						if r.Route.Cluster != clusterName {
-							continue
-						}
-						prefix := r.Match.Prefix
-						if catchAll {
-							return prefix
-						}
-						domain := strings.Join(vh.Domains, ",")
-						if prefix != "" && prefix != "/" {
-							return domain + prefix
-						}
-						return domain
-					}
-				}
-			}
-		}
-	}
-	return "(no route, cluster only)"
 }
 
 func init() {

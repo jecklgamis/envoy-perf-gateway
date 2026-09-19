@@ -492,6 +492,13 @@ gatewayctl remove-backend --name httpbin</code></pre>
 
 cat rendered/cds.yaml   <span class="cmt"># every live cluster, straight from the source</span></code></pre>
       <p>Both use whichever mode is configured (<code>gatewayctl config set mode http|s3</code>, or <code>CONFIG_SOURCE_KIND</code>), the same way <code>push-http</code>/<code>push-s3</code> do. A file that's never been pushed is skipped with a message rather than treated as an error.</p>
+
+      <h3>Rebuilding <code>values.yaml</code> from what's live</h3>
+      <p><code>gatewayctl generate-values</code> goes a step further than <code>--remote</code> or <code>fetch</code>: instead of a display table or raw files, it reconstructs an actual <code>values.yaml</code> - the same file <code>add-backend</code>/<code>fault</code> read and write - from what's currently live. Every field (host, port, tls, domain, route-prefix, host-header, timeouts, faults) is recoverable from <code>cds.yaml</code>/<code>lds.yaml</code>/<code>runtime.yaml</code>, the same way <code>kubectl get -o yaml</code> exports a live object's manifest:</p>
+<pre><code>gatewayctl generate-values
+<span class="cmt"># Wrote config/values.yaml: 3 backend(s), 1 fault override(s)</span></code></pre>
+      <p>Use this to sync local state before making further changes - the same shape as <code>git pull</code> before <code>git push</code> - instead of trusting whatever's already sitting in local <code>values.yaml</code>, which may be stale or may not even be the copy that was last used to push. It refuses to overwrite an existing <code>values.yaml</code> unless you pass <code>--force</code>, since that would discard any local-only changes not yet pushed.</p>
+      <div class="note">One field can't round-trip: a backend's <code>--timeout</code> is a route-level Envoy property, so a backend registered with no route at all (<code>--domain</code>/<code>--route-prefix</code> both omitted) never persists that value anywhere - it comes back as the CLI's own default (<code>15s</code>) rather than whatever it actually was. Every other field is exact.</div>
     </section>
 
     <section id="routing">
