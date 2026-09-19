@@ -307,3 +307,7 @@ fortio load -qps 100 -t 30s http://localhost:8080/httpbin/get
 Found a bug, have a feature request, or want to submit a fix? Open an
 [issue](https://github.com/jecklgamis/envoy-perf-gateway/issues) or a
 [pull request](https://github.com/jecklgamis/envoy-perf-gateway/pulls).
+
+## License
+
+[Apache License 2.0](LICENSE)
