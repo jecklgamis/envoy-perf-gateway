@@ -41,6 +41,12 @@ var faultAbortCmd = &cobra.Command{
 		if err := validateName("target", faultAbortTarget); err != nil {
 			return err
 		}
+		if err := validatePercent("percent", faultAbortPercent); err != nil {
+			return err
+		}
+		if err := validateHTTPStatus("status", faultAbortStatus); err != nil {
+			return err
+		}
 
 		v, err := config.Load(valuesPath)
 		if err != nil {
@@ -76,6 +82,12 @@ var faultDelayCmd = &cobra.Command{
 	Short: "Delay a percentage of one target's requests",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := validateName("target", faultDelayTarget); err != nil {
+			return err
+		}
+		if err := validatePercent("percent", faultDelayPercent); err != nil {
+			return err
+		}
+		if err := validateNonNegative("duration-ms", faultDelayDurationMs); err != nil {
 			return err
 		}
 

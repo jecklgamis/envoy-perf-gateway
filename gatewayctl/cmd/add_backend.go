@@ -30,6 +30,15 @@ var addBackendCmd = &cobra.Command{
 		if err := validateName("name", abName); err != nil {
 			return err
 		}
+		if err := validatePort("port", abPort); err != nil {
+			return err
+		}
+		if err := validateDuration("connect-timeout", abConnectTimeout); err != nil {
+			return err
+		}
+		if err := validateDuration("timeout", abTimeout); err != nil {
+			return err
+		}
 
 		// A missing values.yaml with a mode configured is the classic
 		// wrong-directory/wrong-machine trap: config.Load silently treats
