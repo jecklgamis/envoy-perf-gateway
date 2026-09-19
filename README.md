@@ -301,3 +301,9 @@ especially if you also want a built-in web UI for live results:
 ```bash
 fortio load -qps 100 -t 30s http://localhost:8080/httpbin/get
 ```
+
+## Contributing
+
+Found a bug, have a feature request, or want to submit a fix? Open an
+[issue](https://github.com/jecklgamis/envoy-perf-gateway/issues) or a
+[pull request](https://github.com/jecklgamis/envoy-perf-gateway/pulls).
