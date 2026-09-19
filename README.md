@@ -249,7 +249,7 @@ fallback route. This requires the `layered_runtime.admin` layer in
 `config/envoy.yaml`; without it, `/runtime_modify` returns
 `503 No admin layer specified`.
 
-## Run Perf Test
+## Perf Testing
 
 Point a load generator at `http://localhost:8080/` (or a routed backend
 path) while toggling fault injection to observe how client-side retry,
