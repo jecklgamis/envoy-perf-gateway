@@ -24,6 +24,10 @@ var addBackendCmd = &cobra.Command{
 	Use:   "add-backend",
 	Short: "Add (or replace) a backend and hot-reload Envoy - no restart",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateName("name", abName); err != nil {
+			return err
+		}
+
 		v, err := config.Load(valuesPath)
 		if err != nil {
 			return err

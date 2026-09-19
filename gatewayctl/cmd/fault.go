@@ -38,6 +38,10 @@ var faultAbortCmd = &cobra.Command{
 	Use:   "abort",
 	Short: "Return an error status for a percentage of one target's requests",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateName("target", faultAbortTarget); err != nil {
+			return err
+		}
+
 		v, err := config.Load(valuesPath)
 		if err != nil {
 			return err
@@ -71,6 +75,10 @@ var faultDelayCmd = &cobra.Command{
 	Use:   "delay",
 	Short: "Delay a percentage of one target's requests",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateName("target", faultDelayTarget); err != nil {
+			return err
+		}
+
 		v, err := config.Load(valuesPath)
 		if err != nil {
 			return err

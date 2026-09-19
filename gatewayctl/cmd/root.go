@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"github.com/spf13/cobra"
 
@@ -12,6 +13,20 @@ import (
 	"github.com/jecklgamis/envoy-perf-gateway/gatewayctl/internal/render"
 	"github.com/jecklgamis/envoy-perf-gateway/gatewayctl/internal/settings"
 )
+
+// validNameRE restricts backend/fault-target names to a safe charset.
+// These names end up as Envoy runtime keys that the fetcher (running as
+// root inside the gateway container) turns into filesystem paths via
+// expandRuntimeLayer - without this, a name containing "/" or ".."
+// segments could write outside its intended directory.
+var validNameRE = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
+func validateName(flag, value string) error {
+	if !validNameRE.MatchString(value) {
+		return fmt.Errorf("--%s %q: only letters, digits, '-', and '_' are allowed", flag, value)
+	}
+	return nil
+}
 
 var (
 	valuesPath  string

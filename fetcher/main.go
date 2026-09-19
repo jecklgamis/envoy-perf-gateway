@@ -160,6 +160,15 @@ func expandRuntimeLayer(runtimeRoot string, content []byte) error {
 		return err
 	}
 	for key, value := range desired {
+		// gatewayctl validates --name/--target before a key ever reaches
+		// this manifest, but this process runs as root and this content
+		// came over the network, so refuse anything that isn't a bare
+		// filename on its own merits too - a key containing a path
+		// separator or ".." must never be allowed to write outside
+		// dataDir via filepath.Join's cleaning.
+		if key == "" || key != filepath.Base(key) || key == "." || key == ".." {
+			return fmt.Errorf("refusing unsafe runtime key %q", key)
+		}
 		if err := atomicWrite(filepath.Join(dataDir, key), []byte(value)); err != nil {
 			return fmt.Errorf("writing runtime key %s: %w", key, err)
 		}

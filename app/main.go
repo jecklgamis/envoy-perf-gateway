@@ -1,6 +1,7 @@
-// Default echo backend: returns request metadata as JSON. Used as
-// default_app in the gateway's CDS/LDS - the catch-all cluster any route
-// without a more specific backend falls through to.
+// Default echo backend: returns request metadata as JSON, in the same
+// shape as httpbin.org/anything. Used as default_app in the gateway's
+// CDS/LDS - the catch-all cluster any route without a more specific
+// backend falls through to.
 package main
 
 import (
@@ -12,47 +13,60 @@ import (
 	"os"
 )
 
-type response struct {
-	OK      string      `json:"ok"`
-	Service string      `json:"service"`
-	Request requestData `json:"request"`
-}
+// maxBodyBytes caps how much of a request body echo will buffer, so a
+// large/unbounded body can't exhaust memory - this backend is reachable
+// directly on the gateway's public port.
+const maxBodyBytes = 10 << 20 // 10MiB
 
-type requestData struct {
-	RemoteIP string              `json:"remote_ip"`
-	Method   string              `json:"method"`
-	Path     string              `json:"path"`
-	Headers  map[string][]string `json:"headers"`
-	Query    *string             `json:"query"`
-	Body     string              `json:"body"`
+type response struct {
+	Args    map[string]string `json:"args"`
+	Data    string            `json:"data"`
+	Headers map[string]string `json:"headers"`
+	Method  string            `json:"method"`
+	Origin  string            `json:"origin"`
+	URL     string            `json:"url"`
 }
 
 func echo(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	body, _ := io.ReadAll(r.Body)
 
-	var query *string
-	if q := r.URL.RawQuery; q != "" {
-		query = &q
+	args := map[string]string{}
+	for key, values := range r.URL.Query() {
+		args[key] = values[0]
 	}
 
-	remoteIP := r.RemoteAddr
+	headers := map[string]string{}
+	for key, values := range r.Header {
+		headers[key] = values[0]
+	}
+
+	origin := r.RemoteAddr
 	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		remoteIP = host
+		origin = host
 	}
 
-	data := requestData{
-		RemoteIP: remoteIP,
-		Method:   r.Method,
-		Path:     r.URL.Path,
-		Headers:  r.Header,
-		Query:    query,
-		Body:     string(body),
+	scheme := "http"
+	if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
+		scheme = proto
+	} else if r.TLS != nil {
+		scheme = "https"
+	}
+	url := scheme + "://" + r.Host + r.URL.RequestURI()
+
+	data := response{
+		Args:    args,
+		Data:    string(body),
+		Headers: headers,
+		Method:  r.Method,
+		Origin:  origin,
+		URL:     url,
 	}
 
 	log.Printf("[app] %+v", data)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response{OK: "true", Service: "default-app", Request: data})
+	json.NewEncoder(w).Encode(data)
 }
 
 func main() {
