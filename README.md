@@ -168,12 +168,19 @@ push to S3 automatically.
 `gatewayctl list-backends` and `gatewayctl remove-backend --name <name>`
 round out `add-backend` from the Quickstart.
 
-`--route-prefix` on `add-backend` is optional - omit it to register the
-cluster without wiring a route (e.g. if you'll reference it from a
-hand-edited route later). Requests are matched with a path prefix and
-rewritten to `/` on the upstream. Everything not matched by a backend
-route falls through to the `default_app` cluster (the bundled Go echo
-server on :5050).
+### Path Based Routing
+
+`--route-prefix` on `add-backend` routes requests under that path prefix to
+the backend, rewritten to `/` on the upstream:
+
+```bash
+gatewayctl add-backend --name httpbin --host httpbin.org --port 443 --tls --route-prefix /httpbin/
+
+curl http://localhost:8080/httpbin/get
+```
+
+It's optional - omit it to register the cluster without a route. Unmatched
+requests fall through to `default_app` (the bundled echo server on :5050).
 
 ### Virtual Host Routing
 
