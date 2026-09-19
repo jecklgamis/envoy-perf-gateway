@@ -168,6 +168,20 @@ push to S3 automatically.
 `gatewayctl list-backends` and `gatewayctl remove-backend --name <name>`
 round out `add-backend` from the Quickstart.
 
+```bash
+gatewayctl list-backends
+# httpbin              httpbin.org:443  tls        /httpbin/
+# svc-a                svc-a.internal:8080  plaintext  frontend-a.test.local
+
+gatewayctl remove-backend --name httpbin
+```
+
+`list-backends` reads straight from `values.yaml` and prints one line per
+backend - name, upstream host:port, TLS mode, and the resolved route (domain
+and/or path prefix, or `(no route, cluster only)` if neither was set).
+`remove-backend` drops the named backend's cluster and route, then pushes
+the updated config the same way `add-backend` does.
+
 ### Path Based Routing
 
 `--route-prefix` on `add-backend` routes requests under that path prefix to
