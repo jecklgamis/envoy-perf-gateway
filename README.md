@@ -18,7 +18,7 @@ control plane.
 - **No xDS control plane to run** - dynamic backends via filesystem
   CDS/LDS and inotify hot-reload. Skip the usual xDS server, gRPC
   streams, and cluster bootstrap ceremony.
-- **One CLI for the whole workflow** - `gatewayctl` adds/removes
+- **One CLI for the whole workflow** - the Gateway CLI adds/removes
   backends, pushes config, and drives fault injection, all from one
   binary with no YAML hand-editing.
 - **Pluggable config source** - push backend config over HTTP or
@@ -29,7 +29,7 @@ control plane.
 ## Quickstart
 
 Nothing to build - pulls the published Docker images and a pre-built
-`gatewayctl` binary from the
+Gateway CLI (`gatewayctl`) binary from the
 [releases page](https://github.com/jecklgamis/envoy-perf-gateway/releases).
 
 **1. Run the gateway, already pointed at the config server** (fine if
@@ -55,7 +55,8 @@ docker run --name envoy-perf-gateway-config-server -p 8090:8090 \
   jecklgamis/envoy-perf-gateway-config-server:latest
 ```
 
-**3. In a third terminal, download `gatewayctl`** (pick your platform -
+**3. In a third terminal, download the Gateway CLI (`gatewayctl`)**
+(pick your platform -
 check the releases page for the current tag; GitHub's `releases/latest`
 link only resolves once a non-prerelease version is published):
 
@@ -67,8 +68,8 @@ chmod +x gatewayctl
 Other platforms: swap the suffix for `gatewayctl-darwin-amd64`,
 `gatewayctl-linux-amd64`, or `gatewayctl-linux-arm64`.
 
-**4. Point `gatewayctl` at the config server** - this saves the mode, URL, and
-token to `gatewayctl`'s settings file (`~/.config/gatewayctl/config.yaml`
+**4. Point the Gateway CLI at the config server** - this saves the mode, URL, and
+token to the Gateway CLI's settings file (`~/.config/gatewayctl/config.yaml`
 by default) so `add-backend`/`remove-backend` push automatically from here
 on, no separate `push-http` call each time:
 
@@ -79,7 +80,7 @@ on, no separate `push-http` call each time:
 ```
 
 **5. Add a real backend** - no restart of the gateway needed, it's already
-polling the config server, this is where `gatewayctl` earns its keep,
+polling the config server, this is where the Gateway CLI earns its keep,
 dynamically wiring in a backend:
 
 ```bash
@@ -95,6 +96,9 @@ affects `httpbin` traffic, nothing else:
 ./gatewayctl fault abort --target httpbin --percent 100 --status 503
 curl http://localhost:8080/httpbin/get     # now 503
 curl http://localhost:8080/                # unaffected - still default_app
+
+./gatewayctl fault delay --target httpbin --percent 100 --duration-ms 2000
+curl http://localhost:8080/httpbin/get     # now takes ~2s
 
 ./gatewayctl fault reset --target httpbin
 curl http://localhost:8080/httpbin/get     # back to normal
@@ -114,7 +118,7 @@ make all   # builds the envoy-perf-gateway image
 make -C config_server image
 ```
 
-**gatewayctl:**
+**Gateway CLI:**
 
 ```bash
 make -C gatewayctl install     # go install, puts it on $PATH
@@ -122,8 +126,18 @@ make build-gatewayctl-all      # cross-compile all platforms into gatewayctl/dis
 ```
 
 See [docs/architecture.md](docs/architecture.md) for how config flows from
-`gatewayctl` through to a running Envoy, and why the HTTP/S3 distribution
+the Gateway CLI through to a running Envoy, and why the HTTP/S3 distribution
 split exists.
+
+## Installing The CLI
+
+Download a pre-built binary from the
+[releases page](https://github.com/jecklgamis/envoy-perf-gateway/releases)
+(see Quickstart step 3), or install with Go:
+
+```bash
+go install github.com/jecklgamis/envoy-perf-gateway/gatewayctl@latest
+```
 
 ## Running From Source (HTTP Source)
 
