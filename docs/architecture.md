@@ -2,22 +2,6 @@
 
 ![architecture diagram](architecture.png)
 
-```
-gatewayctl (host)                                     Envoy container
-  add-backend / remove-backend                      +--------------------------------+
-        |                                            | config-fetcher (supervisor)    |
-        v                                            |   polls HTTP or S3             |
-  config/values.yaml                                 |   atomic-writes into ----+     |
-        |                                             \                         |     |
-        v                                              \                        v     |
-  render -> rendered/{cds,lds}.yaml                     `--------> /etc/envoy/dynamic  |
-        |                                                                  ^           |
-        | HTTP: gatewayctl push-http uploads to config_server's storage/   |           |
-        | S3:   gatewayctl push-s3 uploads rendered/ to a bucket           |           |
-        +------------------------------------------------------------------           |
-                                                            Envoy inotify watch -> hot-reload
-```
-
 ## Dynamic Configuration
 
 Clusters and routes are not static in `config/envoy.yaml`. The bootstrap
