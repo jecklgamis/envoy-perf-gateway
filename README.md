@@ -175,7 +175,7 @@ rewritten to `/` on the upstream. Everything not matched by a backend
 route falls through to the `default_app` cluster (the bundled Go echo
 server on :5050).
 
-### Frontend/Backend Pairs (Domain-Based Routing)
+### Virtual Host Routing
 
 Pair a backend with a specific frontend `Host` header instead of (or in
 addition to) a path prefix, via `--domain`. Each domain gets its own Envoy
