@@ -7,6 +7,8 @@ Envoy as a front door for performance and chaos testing. Add and remove
 backends through a CLI, and toggle fault injection at runtime, with no
 restarts and no full xDS control plane.
 
+**[User Guide](https://jecklgamis.github.io/envoy-perf-gateway/)**
+
 ## Features
 
 - **Per-backend fault isolation.** Inject aborts and delays into a single

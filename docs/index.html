@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>envoy-perf-gateway — User Guide</title>
+<meta name="description" content="User guide for envoy-perf-gateway: Envoy as a front door for perf and chaos testing.">
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-alt: #f6f7f9;
+    --text: #1a1d23;
+    --text-muted: #5c6370;
+    --border: #e3e6ea;
+    --accent: #6a3df5;
+    --accent-soft: #efe9fe;
+    --code-bg: #1a1d23;
+    --code-text: #e6e6e6;
+    --code-accent: #b39dff;
+    --warn-bg: #fff6e5;
+    --warn-border: #f0c674;
+    --sidebar-width: 260px;
+    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #14161a;
+      --bg-alt: #1b1e24;
+      --text: #e7e9ec;
+      --text-muted: #9aa1ac;
+      --border: #2a2e36;
+      --accent: #a58bff;
+      --accent-soft: #262138;
+      --code-bg: #0d0f12;
+      --code-text: #e6e6e6;
+      --code-accent: #c3b0ff;
+      --warn-bg: #2b2413;
+      --warn-border: #6b5620;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161a;
+    --bg-alt: #1b1e24;
+    --text: #e7e9ec;
+    --text-muted: #9aa1ac;
+    --border: #2a2e36;
+    --accent: #a58bff;
+    --accent-soft: #262138;
+    --code-bg: #0d0f12;
+    --code-text: #e6e6e6;
+    --code-accent: #c3b0ff;
+    --warn-bg: #2b2413;
+    --warn-border: #6b5620;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    line-height: 1.6;
+  }
+
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  code, pre, kbd {
+    font-family: var(--font-mono);
+    font-size: 0.88em;
+  }
+  code {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.1em 0.4em;
+  }
+  pre {
+    background: var(--code-bg);
+    color: var(--code-text);
+    border-radius: 8px;
+    padding: 14px 16px;
+    overflow-x: auto;
+    line-height: 1.5;
+  }
+  pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    color: inherit;
+  }
+  .cmt { color: #8a8f98; }
+
+  .layout {
+    display: flex;
+    max-width: 1180px;
+    margin: 0 auto;
+  }
+
+  .sidebar {
+    width: var(--sidebar-width);
+    flex-shrink: 0;
+    padding: 28px 20px 40px;
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    height: 100vh;
+    overflow-y: auto;
+    border-right: 1px solid var(--border);
+  }
+  .sidebar .brand {
+    font-weight: 700;
+    font-size: 1.05rem;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sidebar .brand .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--accent);
+    flex-shrink: 0;
+  }
+  .sidebar .tagline {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    margin-bottom: 22px;
+  }
+  .sidebar nav h3 {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin: 20px 0 8px;
+  }
+  .sidebar nav ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .sidebar nav li a {
+    display: block;
+    color: var(--text);
+    padding: 5px 0;
+    font-size: 0.9rem;
+    border-left: 2px solid transparent;
+    padding-left: 10px;
+    margin-left: -12px;
+  }
+  .sidebar nav li a:hover {
+    text-decoration: none;
+    color: var(--accent);
+  }
+  .sidebar nav li a.active {
+    border-left-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .theme-toggle {
+    margin-top: 24px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+
+  .content {
+    flex: 1;
+    min-width: 0;
+    padding: 40px 40px 100px;
+  }
+  .content > section {
+    margin-bottom: 56px;
+    scroll-margin-top: 20px;
+  }
+  .content h1 {
+    font-size: 2rem;
+    margin: 0 0 8px;
+  }
+  .content h2 {
+    font-size: 1.5rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+    margin-top: 0;
+  }
+  .content h3 {
+    font-size: 1.15rem;
+    margin-bottom: 8px;
+  }
+  .lede {
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    margin-top: 0;
+  }
+  .badges img { margin-right: 6px; }
+
+  .grid-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 14px;
+    margin: 20px 0;
+  }
+  .card {
+    border: 1px solid var(--border);
+    background: var(--bg-alt);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .card h4 {
+    margin: 0 0 6px;
+    font-size: 0.95rem;
+  }
+  .card p {
+    margin: 0;
+    font-size: 0.86rem;
+    color: var(--text-muted);
+  }
+
+  .step {
+    border-left: 3px solid var(--accent-soft);
+    padding-left: 18px;
+    margin: 18px 0;
+  }
+  .step h4 {
+    margin: 0 0 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .step h4 .num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.9rem;
+    margin: 16px 0;
+  }
+  th, td {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { color: var(--text-muted); font-weight: 600; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.03em; }
+
+  .note, .warn {
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 0.9rem;
+    margin: 16px 0;
+  }
+  .note {
+    background: var(--accent-soft);
+    border: 1px solid var(--accent);
+  }
+  .warn {
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+  }
+
+  .arch-img {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin: 16px 0;
+  }
+
+  footer {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    border-top: 1px solid var(--border);
+    padding-top: 20px;
+  }
+
+  .mobile-toggle { display: none; }
+
+  @media (max-width: 900px) {
+    .layout { flex-direction: column; }
+    .sidebar {
+      width: 100%;
+      height: auto;
+      position: relative;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar nav { display: none; }
+    .sidebar.open nav { display: block; }
+    .mobile-toggle {
+      display: inline-block;
+      margin-top: 10px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .content { padding: 28px 20px 60px; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand"><span class="dot"></span> envoy-perf-gateway</div>
+    <div class="tagline">User Guide</div>
+    <button class="mobile-toggle" id="navToggle" type="button">Menu ▾</button>
+    <nav id="navList">
+      <h3>Getting Started</h3>
+      <ul>
+        <li><a href="#overview">Overview</a></li>
+        <li><a href="#quickstart">Quickstart</a></li>
+        <li><a href="#installing-cli">Installing the CLI</a></li>
+      </ul>
+      <h3>Using the Gateway</h3>
+      <ul>
+        <li><a href="#managing-backends">Managing Backends</a></li>
+        <li><a href="#routing">Routing</a></li>
+        <li><a href="#timeouts">Timeouts</a></li>
+        <li><a href="#fault-injection">Fault Injection</a></li>
+        <li><a href="#perf-testing">Perf Testing</a></li>
+      </ul>
+      <h3>Running It</h3>
+      <ul>
+        <li><a href="#from-source">Running From Source</a></li>
+        <li><a href="#kubernetes">Kubernetes (Helm)</a></li>
+      </ul>
+      <h3>Reference</h3>
+      <ul>
+        <li><a href="#architecture">Architecture</a></li>
+        <li><a href="#troubleshooting">Troubleshooting</a></li>
+        <li><a href="#contributing">Contributing &amp; License</a></li>
+      </ul>
+    </nav>
+    <button class="theme-toggle" id="themeToggle" type="button">Toggle theme</button>
+  </aside>
+
+  <main class="content">
+
+    <section id="overview">
+      <h1>envoy-perf-gateway</h1>
+      <p class="lede">Envoy as a front door for perf and chaos testing. Add and remove backends through a CLI, and toggle fault injection at runtime, with no restarts and no full xDS control plane.</p>
+
+      <div class="grid-cards">
+        <div class="card">
+          <h4>Per-backend fault isolation</h4>
+          <p>Inject aborts and delays into a single backend without affecting any other route.</p>
+        </div>
+        <div class="card">
+          <h4>Live toggling, zero restarts</h4>
+          <p>Fault injection distributes like a backend change — no redeploy — and converges across every gateway replica.</p>
+        </div>
+        <div class="card">
+          <h4>No xDS control plane</h4>
+          <p>Backends, routes, and fault injection all update dynamically via filesystem-based CDS/LDS/runtime and inotify hot-reload.</p>
+        </div>
+        <div class="card">
+          <h4>One CLI for the workflow</h4>
+          <p><code>gatewayctl</code> adds/removes backends, pushes config, and drives fault injection — no hand-edited YAML.</p>
+        </div>
+        <div class="card">
+          <h4>Pluggable config source</h4>
+          <p>Distribute configuration over HTTP (the bundled config server) or directly to S3.</p>
+        </div>
+        <div class="card">
+          <h4>Ready to run</h4>
+          <p>Pre-built Docker images and CLI binaries are published with every release.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="quickstart">
+      <h2>Quickstart</h2>
+      <p>Uses the published Docker images and a pre-built <code>gatewayctl</code> binary — nothing to build.</p>
+
+      <div class="step">
+        <h4><span class="num">1</span> Start the gateway</h4>
+        <p>In its own terminal. This works even if the config server isn't up yet — it serves a built-in default configuration meanwhile.</p>
+<pre><code><span class="cmt"># pulls the published image and runs it, pointed at a local config server</span>
+docker pull jecklgamis/envoy-perf-gateway:latest
+docker run --name envoy-perf-gateway -p 8080:8080 -p 9901:9901 \
+  -e CONFIG_SOURCE_KIND=http \
+  -e CONFIG_SOURCE_URL=http://host.docker.internal:8090 \
+  -e CONFIG_API_TOKEN=default \
+  jecklgamis/envoy-perf-gateway:latest</code></pre>
+      </div>
+
+      <div class="step">
+        <h4><span class="num">2</span> Start the config server</h4>
+        <p>In a separate terminal.</p>
+<pre><code>docker pull jecklgamis/envoy-perf-gateway-config-server:latest
+docker run --name envoy-perf-gateway-config-server -p 8090:8090 \
+  -e API_TOKEN=default \
+  jecklgamis/envoy-perf-gateway-config-server:latest</code></pre>
+      </div>
+
+      <div class="step">
+        <h4><span class="num">3</span> Get <code>gatewayctl</code></h4>
+        <p>Download a pre-built binary for your platform from the <a href="https://github.com/jecklgamis/envoy-perf-gateway/releases">releases page</a>, or install it with Go.</p>
+<pre><code><span class="cmt"># pick your platform</span>
+curl -L -o gatewayctl https://github.com/jecklgamis/envoy-perf-gateway/releases/latest/download/gatewayctl-darwin-arm64
+chmod +x gatewayctl
+
+<span class="cmt"># or</span>
+go install github.com/jecklgamis/envoy-perf-gateway/gatewayctl@latest</code></pre>
+        <p>Other platforms: <code>gatewayctl-darwin-amd64</code>, <code>gatewayctl-linux-amd64</code>, <code>gatewayctl-linux-arm64</code>.</p>
+      </div>
+
+      <div class="step">
+        <h4><span class="num">4</span> Point the CLI at the config server</h4>
+        <p>Saved to <code>~/.config/gatewayctl/config.yaml</code>, so <code>add-backend</code>/<code>remove-backend</code>/<code>fault</code> push automatically from here on.</p>
+<pre><code>./gatewayctl config set mode http
+./gatewayctl config set http.server-url http://localhost:8090
+./gatewayctl config set http.api-token default</code></pre>
+      </div>
+
+      <div class="step">
+        <h4><span class="num">5</span> Add a backend</h4>
+        <p>No gateway restart required.</p>
+<pre><code>./gatewayctl add-backend --name httpbin --host httpbin.org --port 443 --tls --route-prefix /httpbin/
+
+curl http://localhost:8080/httpbin/get</code></pre>
+      </div>
+
+      <div class="step">
+        <h4><span class="num">6</span> Try fault injection</h4>
+        <p>Scoped to just the <code>httpbin</code> backend. This pushes through the config pipeline like a backend change, so allow up to <code>CONFIG_POLL_INTERVAL_SECONDS</code> (15s by default) for the gateway to pick it up.</p>
+<pre><code>./gatewayctl fault abort --target httpbin --percent 100 --status 503
+curl http://localhost:8080/httpbin/get     <span class="cmt"># returns 503 within ~15s</span>
+curl http://localhost:8080/                <span class="cmt"># unaffected - still default_app</span>
+
+./gatewayctl fault delay --target httpbin --percent 100 --duration-ms 2000
+curl http://localhost:8080/httpbin/get     <span class="cmt"># now takes ~2s</span>
+
+./gatewayctl fault reset --target httpbin
+curl http://localhost:8080/httpbin/get     <span class="cmt"># back to normal</span></code></pre>
+      </div>
+    </section>
+
+    <section id="installing-cli">
+      <h2>Installing the CLI</h2>
+      <p><code>gatewayctl</code> is a self-contained, statically-linked Go binary — no runtime dependency. Two ways to get it:</p>
+      <ul>
+        <li>Download a pre-built binary from the <a href="https://github.com/jecklgamis/envoy-perf-gateway/releases">releases page</a> for your platform.</li>
+        <li>Install with Go: <code>go install github.com/jecklgamis/envoy-perf-gateway/gatewayctl@latest</code></li>
+      </ul>
+    </section>
+
+    <section id="managing-backends">
+      <h2>Managing Backends</h2>
+      <p><code>gatewayctl list-backends</code> and <code>gatewayctl remove-backend --name &lt;name&gt;</code> round out <code>add-backend</code>:</p>
+<pre><code>gatewayctl list-backends
+<span class="cmt"># httpbin              httpbin.org:443  tls        /httpbin/
+# svc-a                svc-a.internal:8080  plaintext  frontend-a.test.local</span>
+
+gatewayctl remove-backend --name httpbin</code></pre>
+      <p><code>list-backends</code> prints the name, upstream host:port, TLS mode, and resolved route for each backend (or <code>(no route, cluster only)</code> if none is configured). <code>remove-backend</code> removes the backend's cluster and route, then pushes the updated configuration, the same way <code>add-backend</code> does.</p>
+
+      <div class="note">Backend names (<code>--name</code>) are restricted to letters, digits, <code>-</code>, and <code>_</code>. This isn't arbitrary — the name becomes part of an Envoy runtime key that gets turned into a filesystem path on the gateway, so it's validated up front.</div>
+    </section>
+
+    <section id="routing">
+      <h2>Routing</h2>
+
+      <h3>Path Based Routing</h3>
+      <p><code>--route-prefix</code> routes requests under that path prefix to the backend, rewritten to <code>/</code> on the upstream:</p>
+<pre><code>gatewayctl add-backend --name httpbin --host httpbin.org --port 443 --tls --route-prefix /httpbin/
+
+curl http://localhost:8080/httpbin/get</code></pre>
+      <p>This flag is optional; omitting it registers the cluster without a route. Unmatched requests fall through to <code>default_app</code>, the bundled echo server on port <code>5050</code>.</p>
+
+      <h3>Virtual Host Routing</h3>
+      <p><code>--domain</code> gives a backend its own Envoy virtual host, matched on the <code>Host</code> header, instead of or in addition to a path prefix:</p>
+<pre><code>gatewayctl add-backend \
+  --name svc-a --host svc-a.internal --port 8080 \
+  --domain frontend-a.test.local
+
+gatewayctl add-backend \
+  --name svc-b --host svc-b.internal --port 8080 \
+  --domain frontend-b.test.local --route-prefix /api/
+
+curl -H "Host: frontend-a.test.local" http://localhost:8080/
+curl -H "Host: frontend-b.test.local" http://localhost:8080/api/anything</code></pre>
+      <p><code>--domain</code> alone routes all traffic under that Host header to the backend. Combined with <code>--route-prefix</code>, only that path prefix under the domain is routed. If neither flag is set, the backend still registers a cluster without a route.</p>
+    </section>
+
+    <section id="timeouts">
+      <h2>Timeouts</h2>
+      <p><code>--connect-timeout</code> and <code>--timeout</code> control how long Envoy waits on the upstream connection and on the overall request, respectively:</p>
+<pre><code>gatewayctl add-backend --name slow-svc --host slow-svc.internal --port 8080 \
+  --route-prefix /slow/ --connect-timeout 2s --timeout 30s</code></pre>
+      <p><code>--connect-timeout</code> sets the cluster's connect timeout and defaults to <code>5s</code>. <code>--timeout</code> sets the route's request timeout and defaults to <code>15s</code>. Both accept Envoy duration strings (e.g. <code>500ms</code>, <code>2s</code>).</p>
+    </section>
+
+    <section id="fault-injection">
+      <h2>Fault Injection</h2>
+      <p>Each route, including the <code>default_app</code> fallback, has its own independently toggleable fault injection, isolated by a unique Envoy runtime key per <code>--target</code>. Faulting one backend does not affect any other's traffic:</p>
+<pre><code><span class="cmt"># 30% of backend-1's requests return 503 - backend-2, default_app, etc. are unaffected</span>
+gatewayctl fault abort --target backend-1 --percent 30 --status 503
+
+<span class="cmt"># 20% of backend-1's requests are delayed by 2s</span>
+gatewayctl fault delay --target backend-1 --percent 20 --duration-ms 2000
+
+<span class="cmt"># reset backend-1 to baseline</span>
+gatewayctl fault reset --target backend-1
+
+<span class="cmt"># target the default_app fallback route instead</span>
+gatewayctl fault abort --target default_app --percent 100 --status 503</code></pre>
+      <p><code>--target</code> is the backend's <code>--name</code> value, or <code>default_app</code> for the fallback route.</p>
+
+      <h3>How it's distributed</h3>
+      <p>Fault state is written to <code>values.yaml</code> (a <code>faults</code> entry per target) and distributed the same way as backends: rendered into <code>rendered/runtime.yaml</code> and pushed through <code>config_server</code>/S3, the same as <code>cds.yaml</code>/<code>lds.yaml</code>. Envoy picks it up via its <code>layered_runtime</code> disk layer, so every gateway replica converges on the same fault state, and it survives restarts — unlike a one-off admin API call, which only ever reached whichever single pod received it.</p>
+      <div class="note">The tradeoff: a change takes effect on the fetcher's next poll (<code>CONFIG_POLL_INTERVAL_SECONDS</code>, 15s by default), not instantly on the next request. For a sub-second, single-pod override, you can still <code>curl -X POST http://&lt;admin-host&gt;:9901/runtime_modify?&lt;key&gt;=&lt;value&gt;</code> directly against one pod's admin API — it's in-memory only and reverts on that pod's next restart.</div>
+    </section>
+
+    <section id="perf-testing">
+      <h2>Perf Testing</h2>
+      <p>Point a load generator at <code>http://localhost:8080/</code> (or a routed backend path) while toggling fault injection to observe how client-side retry, timeout, and circuit-breaker behavior holds up under a degraded upstream.</p>
+
+      <h3>k6</h3>
+      <p>Scriptable, with pass/fail thresholds and detailed reporting.</p>
+<pre><code>cat &lt;&lt;'EOF' &gt; script.js
+import http from 'k6/http';
+import { check } from 'k6';
+
+export const options = {
+  vus: 50,
+  duration: '30s',
+  thresholds: {
+    http_req_duration: ['p(95)&lt;500'],
+    http_req_failed: ['rate&lt;0.01'],
+  },
+};
+
+export default function () {
+  const res = http.get('http://localhost:8080/httpbin/get');
+  check(res, { 'status is 200': (r) =&gt; r.status === 200 });
+}
+EOF
+
+k6 run script.js</code></pre>
+
+      <h3>oha</h3>
+      <p>Single binary, no script needed — handy for a quick smoke test.</p>
+<pre><code>oha -z 30s -c 50 http://localhost:8080/httpbin/get</code></pre>
+
+      <h3>fortio</h3>
+      <p>Another good option, especially if you also want a built-in web UI for live results.</p>
+<pre><code>fortio load -qps 100 -t 30s http://localhost:8080/httpbin/get</code></pre>
+    </section>
+
+    <section id="from-source">
+      <h2>Running From Source</h2>
+
+      <h3>HTTP source</h3>
+      <p>Each command runs in the foreground — use a separate terminal for each.</p>
+<pre><code><span class="cmt"># terminal 1</span>
+make -C config_server up
+
+<span class="cmt"># terminal 2</span>
+make up</code></pre>
+
+      <h3>S3 source</h3>
+<pre><code>make -C gatewayctl install
+make all
+export CONFIG_S3_BUCKET=my-bucket CONFIG_S3_PREFIX=envoy-perf-gateway/
+make run-s3   <span class="cmt"># needs AWS credentials in your shell env (AWS_ACCESS_KEY_ID etc.)</span></code></pre>
+      <p>Configure the CLI once (<code>gatewayctl config set mode s3</code>, <code>s3.bucket</code>, <code>s3.prefix</code>) so <code>add-backend</code>/<code>remove-backend</code> push to S3 automatically. <code>API_TOKEN</code>/<code>CONFIG_API_TOKEN</code> both default to <code>default</code> if unset — fine on localhost, export a real value for anything beyond that.</p>
+
+      <h3>Building</h3>
+<pre><code>make all                        <span class="cmt"># gateway image</span>
+make -C config_server image     <span class="cmt"># config server image</span>
+make -C gatewayctl install      <span class="cmt"># install gatewayctl to $PATH</span>
+make build-gatewayctl-all       <span class="cmt"># cross-compile all platforms to gatewayctl/dist/</span></code></pre>
+    </section>
+
+    <section id="kubernetes">
+      <h2>Kubernetes (Helm)</h2>
+      <p>Two independent charts under <code>charts/</code>: the gateway, and <code>config_server</code>, matching the fact that <code>config_server</code> can run entirely standalone.</p>
+
+      <h3>1. Install the config server</h3>
+<pre><code>cd charts/envoy-perf-gateway-config-server
+helm install my-config-server . --set apiToken=default</code></pre>
+      <p>Its <code>NOTES.txt</code> output gives the in-cluster Service address to hand to the gateway.</p>
+
+      <h3>2. Install the gateway, pointed at it</h3>
+<pre><code>cd charts/envoy-perf-gateway
+helm install my-gateway . \
+  --set gateway.configApiToken=default \
+  --set gateway.configSourceUrl=http://my-config-server:8090</code></pre>
+      <p>Or with S3 mode, skipping the config server chart entirely:</p>
+<pre><code>helm install my-gateway . \
+  --set gateway.configSourceKind=s3 \
+  --set gateway.s3.bucket=my-bucket</code></pre>
+
+      <table>
+        <tr><th>Key</th><th>Description</th></tr>
+        <tr><td><code>gateway.configSourceKind</code></td><td><code>http</code> or <code>s3</code></td></tr>
+        <tr><td><code>gateway.replicaCount</code></td><td>Gateway pod count. Fault injection and backends both converge across all replicas via the config pipeline.</td></tr>
+        <tr><td><code>gateway.configSourceUrl</code></td><td>Required in <code>http</code> mode — the config server's address.</td></tr>
+        <tr><td><code>gateway.configApiToken</code></td><td>Required in <code>http</code> mode; must match the config server's token. Prefer <code>configApiTokenExistingSecret</code> beyond local/dev use.</td></tr>
+        <tr><td><code>gateway.s3.bucket</code></td><td>Required in <code>s3</code> mode.</td></tr>
+        <tr><td><code>ingress.enabled</code></td><td>Off by default. Both charts ship an nginx + cert-manager Ingress template, disabled unless you opt in.</td></tr>
+      </table>
+
+      <div class="warn">The gateway's admin port (<code>:9901</code>) is exposed on its Service for convenience, but a direct <code>POST /runtime_modify</code> against it only affects one pod and doesn't survive a restart — use <code>gatewayctl fault</code> for anything that should apply across <code>gateway.replicaCount</code> replicas.</div>
+    </section>
+
+    <section id="architecture">
+      <h2>Architecture</h2>
+      <p>Clusters (CDS), listeners (LDS), and fault-injection runtime state are not static in <code>config/envoy.yaml</code>. The bootstrap only points Envoy at a directory it watches via inotify — there is no xDS control plane, no gRPC streams, no cluster bootstrap ceremony.</p>
+      <img class="arch-img" src="architecture.png" alt="Architecture diagram: gatewayctl renders and pushes config through config_server or S3 to a fetcher inside the Envoy container, which hot-reloads Envoy via inotify.">
+      <p><code>gatewayctl</code> on the host only ever writes to <code>values.yaml</code> and the local <code>rendered/</code> directory — it never touches the gateway container's filesystem directly. A <code>fetcher</code> binary running <em>inside</em> that container polls the config server or S3 and writes changes into <code>/etc/envoy/dynamic</code> itself, which is what actually triggers Envoy's inotify-based hot-reload.</p>
+      <p>See the full <a href="architecture.md">architecture doc</a> for the diagram's details, the HTTP/S3 distribution split, and how fault injection's <code>layered_runtime</code> disk layer works.</p>
+    </section>
+
+    <section id="troubleshooting">
+      <h2>Troubleshooting</h2>
+
+      <h3>"No admin layer specified" on <code>fault</code> commands</h3>
+      <p>Requires the <code>layered_runtime.admin</code> layer in <code>config/envoy.yaml</code>. Without it, Envoy's <code>/runtime_modify</code> refuses with <code>503 No admin layer specified</code>.</p>
+
+      <h3>Fetcher logs <code>404 Not Found</code> for <code>runtime.yaml</code></h3>
+      <p>Benign — it just means nothing's been pushed to the config server yet (no backend or fault has ever been added). It resolves itself the moment any <code>gatewayctl</code> command that pushes config runs once.</p>
+
+      <h3>A fault change doesn't seem to apply</h3>
+      <p>Allow up to <code>CONFIG_POLL_INTERVAL_SECONDS</code> (15s by default) for the fetcher's next poll. Check the running gateway's fault state directly against its admin API: <code>curl http://&lt;admin-host&gt;:9901/runtime</code> — the <code>entries</code> field shows exactly what Envoy currently sees.</p>
+
+      <h3>Scaling <code>gateway.replicaCount</code> and fault injection</h3>
+      <p><code>add-backend</code>/<code>remove-backend</code> scale fine — every replica's fetcher independently converges on the same config. <code>gatewayctl fault</code> also scales correctly as of the current design (it distributes through the same pipeline). A direct admin-API <code>POST /runtime_modify</code>, however, only ever reaches one pod — don't rely on it for anything that needs to apply cluster-wide.</p>
+    </section>
+
+    <section id="contributing">
+      <h2>Contributing &amp; License</h2>
+      <p>Found a bug, have a feature request, or want to submit a fix? Open an <a href="https://github.com/jecklgamis/envoy-perf-gateway/issues">issue</a> or a <a href="https://github.com/jecklgamis/envoy-perf-gateway/pulls">pull request</a>.</p>
+      <p>Licensed under the <a href="https://github.com/jecklgamis/envoy-perf-gateway/blob/main/LICENSE">Apache License 2.0</a>.</p>
+      <footer>
+        <a href="https://github.com/jecklgamis/envoy-perf-gateway">github.com/jecklgamis/envoy-perf-gateway</a>
+      </footer>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  (function () {
+    var toggle = document.getElementById('navToggle');
+    var sidebar = document.getElementById('sidebar');
+    if (toggle) {
+      toggle.addEventListener('click', function () {
+        sidebar.classList.toggle('open');
+      });
+    }
+
+    var themeBtn = document.getElementById('themeToggle');
+    var root = document.documentElement;
+    try {
+      var saved = localStorage.getItem('epg-guide-theme');
+      if (saved) root.setAttribute('data-theme', saved);
+    } catch (e) {}
+    if (themeBtn) {
+      themeBtn.addEventListener('click', function () {
+        var current = root.getAttribute('data-theme');
+        var next = current === 'dark' ? 'light' : 'dark';
+        root.setAttribute('data-theme', next);
+        try { localStorage.setItem('epg-guide-theme', next); } catch (e) {}
+      });
+    }
+
+    var links = document.querySelectorAll('.sidebar nav a');
+    var sections = Array.prototype.map.call(links, function (a) {
+      return document.querySelector(a.getAttribute('href'));
+    });
+    function onScroll() {
+      var pos = window.scrollY + 100;
+      var activeIndex = 0;
+      sections.forEach(function (sec, i) {
+        if (sec && sec.offsetTop <= pos) activeIndex = i;
+      });
+      links.forEach(function (a, i) {
+        a.classList.toggle('active', i === activeIndex);
+      });
+    }
+    document.addEventListener('scroll', onScroll);
+    onScroll();
+  })();
+</script>
+</body>
+</html>
