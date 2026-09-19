@@ -32,8 +32,8 @@ Nothing to build - pulls the published Docker images and a pre-built
 `gatewayctl` binary from the
 [releases page](https://github.com/jecklgamis/envoy-perf-gateway/releases).
 
-**1. Run the gateway, already pointed at config_server** (fine if
-config_server isn't up yet - it serves a baked-in default in the
+**1. Run the gateway, already pointed at the config server** (fine if
+the config server isn't up yet - it serves a baked-in default in the
 meantime). In its own terminal, foreground on purpose - use a new
 terminal for each step from here on:
 
@@ -46,7 +46,7 @@ docker run --name envoy-perf-gateway -p 8080:8080 -p 9901:9901 \
   jecklgamis/envoy-perf-gateway:latest
 ```
 
-**2. In another terminal, bring up config_server:**
+**2. In another terminal, bring up the config server:**
 
 ```bash
 docker pull jecklgamis/envoy-perf-gateway-config-server:latest
@@ -67,7 +67,7 @@ chmod +x gatewayctl
 Other platforms: swap the suffix for `gatewayctl-darwin-amd64`,
 `gatewayctl-linux-amd64`, or `gatewayctl-linux-arm64`.
 
-**4. Point `gatewayctl` at config_server** - this saves the mode, URL, and
+**4. Point `gatewayctl` at the config server** - this saves the mode, URL, and
 token to `gatewayctl`'s settings file (`~/.config/gatewayctl/config.yaml`
 by default) so `add-backend`/`remove-backend` push automatically from here
 on, no separate `push-http` call each time:
@@ -79,7 +79,7 @@ on, no separate `push-http` call each time:
 ```
 
 **5. Add a real backend** - no restart of the gateway needed, it's already
-polling config_server, this is where `gatewayctl` earns its keep,
+polling the config server, this is where `gatewayctl` earns its keep,
 dynamically wiring in a backend:
 
 ```bash
@@ -108,7 +108,7 @@ curl http://localhost:8080/httpbin/get     # back to normal
 make all   # builds the envoy-perf-gateway image
 ```
 
-**config_server:**
+**Config server:**
 
 ```bash
 make -C config_server image
