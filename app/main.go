@@ -14,6 +14,7 @@ import (
 
 type response struct {
 	OK      string      `json:"ok"`
+	Service string      `json:"service"`
 	Request requestData `json:"request"`
 }
 
@@ -51,7 +52,7 @@ func echo(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[app] %+v", data)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response{OK: "true", Request: data})
+	json.NewEncoder(w).Encode(response{OK: "true", Service: "default-app", Request: data})
 }
 
 func main() {

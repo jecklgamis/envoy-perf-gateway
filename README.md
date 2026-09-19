@@ -71,7 +71,7 @@ Other platforms: swap the suffix for `gatewayctl-darwin-amd64`,
 **4. Point the Gateway CLI at the config server** - this saves the mode, URL, and
 token to the Gateway CLI's settings file (`~/.config/gatewayctl/config.yaml`
 by default) so `add-backend`/`remove-backend` push automatically from here
-on, no separate `push-http` call each time:
+on:
 
 ```bash
 ./gatewayctl config set mode http
@@ -159,16 +159,9 @@ export CONFIG_S3_BUCKET=my-bucket CONFIG_S3_PREFIX=envoy-perf-gateway/
 make run-s3   # needs AWS credentials in your shell env (AWS_ACCESS_KEY_ID etc.)
 ```
 
-`add-backend`/`remove-backend` render locally either way; in S3 mode you
-also need `gatewayctl push-s3 --bucket my-bucket --prefix envoy-perf-gateway/`
-after each change (or export `CONFIG_S3_BUCKET`/`CONFIG_S3_PREFIX` so the
-flag can be omitted) for the fetcher to pick it up.
-
-Enable S3 bucket versioning so pushes are rollback-able via
-`aws s3api list-object-versions` / `restore-object`. `config/values.yaml`
-is the human-authored source of truth and is a good candidate to `git commit`
-before each render/push, so backend changes have real history on both
-sides.
+Configure the Gateway CLI once (`gatewayctl config set mode s3`, `s3.bucket`,
+`s3.prefix` - same idea as Quickstart step 4) so `add-backend`/`remove-backend`
+push to S3 automatically.
 
 ## Managing Backends
 
