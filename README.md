@@ -81,14 +81,6 @@ curl http://localhost:8080/                # unaffected - still default_app
 curl http://localhost:8080/httpbin/get     # back to normal
 ```
 
-`API_TOKEN=default` is fine for a local first look; see
-[Authenticating config_server](#authenticating-config_server) below before
-using this anywhere less trusted than localhost.
-
-Once you're past this and want to build from source, add backends
-end-to-end, use S3 instead of HTTP, or dig deeper into fault injection,
-see [Building from source](#building-from-source) and the sections below.
-
 ## Building from source
 
 ```bash
