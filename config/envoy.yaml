@@ -14,6 +14,12 @@ node:
 #      key files here via the same config_server/S3 -> fetcher -> inotify
 #      pipeline used for cds.yaml/lds.yaml, so every replica of the gateway
 #      converges on the same fault state, and it survives restarts.
+#      symlink_root must itself be a symlink Envoy watches for atomic
+#      replacement (the same trick Kubernetes uses for ConfigMap volumes) -
+#      the fetcher writes each poll's keys into a fresh directory and swaps
+#      this symlink to point at it, rather than rewriting files in place,
+#      since Envoy only reloads on the symlink changing, not on file writes
+#      inside whatever it currently points at.
 #   2. admin - required for POST /runtime_modify (an ad-hoc, single-pod,
 #      in-memory override for a quick live test) to be accepted at all -
 #      without it Envoy refuses with 503 "No admin layer specified", even
@@ -24,8 +30,7 @@ layered_runtime:
   layers:
     - name: disk
       disk_layer:
-        symlink_root: /etc/envoy/dynamic/runtime
-        subdirectory: current
+        symlink_root: /etc/envoy/dynamic/runtime/current
     - name: admin
       admin_layer: {}
 

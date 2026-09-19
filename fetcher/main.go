@@ -135,46 +135,50 @@ func atomicWrite(path string, data []byte) error {
 // into that directory instead of writing it as-is.
 const runtimeManifestFilename = "runtime.yaml"
 
-// expandRuntimeLayer decodes a runtime.yaml manifest and reconciles dir so
-// it holds exactly one file per key, named after the key with the value as
-// its content. Each write is atomic (temp file + rename), matching
-// atomicWrite elsewhere in this file, and a key removed from the manifest
-// (e.g. after `gatewayctl fault reset`) has its file removed here too, so
-// the disk_layer doesn't keep applying a stale override.
-func expandRuntimeLayer(dir string, content []byte) error {
+// expandRuntimeLayer decodes a runtime.yaml manifest into a fresh
+// "data-<digest>" directory under runtimeRoot (one file per key), then
+// atomically swaps runtimeRoot/current - a symlink, per Envoy's disk_layer
+// contract - to point at it, and removes the previous data directory.
+//
+// This isn't the same atomic-rename trick used elsewhere in this file for
+// cds.yaml/lds.yaml: Envoy's disk_layer only reloads when the symlink at
+// its configured symlink_root is itself replaced (the same scheme
+// Kubernetes uses for ConfigMap volumes), not when files inside an
+// already-referenced directory change in place - a plain directory with
+// files rewritten in it, which is what an earlier version of this function
+// did, is silently invisible to it (confirmed via /runtime on the admin
+// API: the layer registers but "entries" never populates).
+func expandRuntimeLayer(runtimeRoot string, content []byte) error {
 	var desired map[string]string
 	if err := yaml.Unmarshal(content, &desired); err != nil {
 		return fmt.Errorf("decoding %s: %w", runtimeManifestFilename, err)
 	}
 
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	sum := sha256.Sum256(content)
+	dataDir := filepath.Join(runtimeRoot, "data-"+hex.EncodeToString(sum[:])[:16])
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		return err
 	}
-
-	existing, err := os.ReadDir(dir)
-	if err != nil {
-		return err
-	}
-	stale := make(map[string]bool, len(existing))
-	for _, entry := range existing {
-		if !entry.IsDir() {
-			stale[entry.Name()] = true
-		}
-	}
-
 	for key, value := range desired {
-		if err := atomicWrite(filepath.Join(dir, key), []byte(value)); err != nil {
+		if err := atomicWrite(filepath.Join(dataDir, key), []byte(value)); err != nil {
 			return fmt.Errorf("writing runtime key %s: %w", key, err)
 		}
-		delete(stale, key)
 	}
 
-	for key := range stale {
-		if err := os.Remove(filepath.Join(dir, key)); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("removing stale runtime key %s: %w", key, err)
-		}
+	symlinkPath := filepath.Join(runtimeRoot, "current")
+	tmpLink := symlinkPath + ".tmp"
+	os.Remove(tmpLink)
+	if err := os.Symlink(dataDir, tmpLink); err != nil {
+		return fmt.Errorf("creating %s: %w", tmpLink, err)
+	}
+	previousTarget, _ := os.Readlink(symlinkPath)
+	if err := os.Rename(tmpLink, symlinkPath); err != nil {
+		return fmt.Errorf("swapping %s: %w", symlinkPath, err)
 	}
 
+	if previousTarget != "" && previousTarget != dataDir {
+		os.RemoveAll(previousTarget)
+	}
 	return nil
 }
 
@@ -231,9 +235,9 @@ func main() {
 
 			writeErr := error(nil)
 			if filename == runtimeManifestFilename {
-				runtimeDir := filepath.Join(targetDir, "runtime", "current")
-				if writeErr = expandRuntimeLayer(runtimeDir, content); writeErr == nil {
-					logMsg("INFO", "Fetched %s successfully, updated %s (%d bytes)", filename, runtimeDir, len(content))
+				runtimeRoot := filepath.Join(targetDir, "runtime")
+				if writeErr = expandRuntimeLayer(runtimeRoot, content); writeErr == nil {
+					logMsg("INFO", "Fetched %s successfully, updated %s/current (%d bytes)", filename, runtimeRoot, len(content))
 				}
 			} else {
 				targetPath := filepath.Join(targetDir, filename)
