@@ -169,9 +169,17 @@ then pushes the updated configuration, the same way `add-backend` does.
 ### Path Based Routing
 
 `--route-prefix` routes requests under that path prefix to the backend,
-rewritten to `/` on the upstream. This flag is optional; omitting it
-registers the cluster without a route. Unmatched requests fall through to
-`default_app`, the bundled echo server on port `5050`.
+rewritten to `/` on the upstream:
+
+```bash
+gatewayctl add-backend --name httpbin --host httpbin.org --port 443 --tls --route-prefix /httpbin/
+
+curl http://localhost:8080/httpbin/get
+```
+
+This flag is optional; omitting it registers the cluster without a route.
+Unmatched requests fall through to `default_app`, the bundled echo server
+on port `5050`.
 
 ### Virtual Host Routing
 
