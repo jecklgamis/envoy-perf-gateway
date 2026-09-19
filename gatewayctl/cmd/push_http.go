@@ -21,8 +21,8 @@ var (
 
 var pushHTTPCmd = &cobra.Command{
 	Use:   "push-http",
-	Short: "Upload rendered cds.yaml and lds.yaml to a running config_server over HTTP",
-	Long: `Upload rendered cds.yaml and lds.yaml to a running config_server
+	Short: "Upload rendered cds.yaml, lds.yaml, and runtime.yaml to a running config_server over HTTP",
+	Long: `Upload rendered cds.yaml, lds.yaml, and runtime.yaml to a running config_server
 over HTTP. Use this whenever the server isn't colocated with gatewayctl on
 the same filesystem - e.g. it's deployed separately from wherever you
 run the CLI. Regenerates first.`,
@@ -42,12 +42,12 @@ run the CLI. Regenerates first.`,
 	},
 }
 
-// pushHTTPFiles uploads the already-rendered cds.yaml/lds.yaml. Callers
+// pushHTTPFiles uploads the already-rendered cds.yaml/lds.yaml/runtime.yaml. Callers
 // that need a fresh render first (the push-http command, invoked
 // standalone) call regenerate() themselves before this.
 func pushHTTPFiles(serverURL, apiToken string) error {
 	serverURL = strings.TrimRight(serverURL, "/")
-	for _, filename := range []string{"cds.yaml", "lds.yaml"} {
+	for _, filename := range []string{"cds.yaml", "lds.yaml", "runtime.yaml"} {
 		localPath := filepath.Join(renderedDir, filename)
 		url := fmt.Sprintf("%s/config/%s", serverURL, filename)
 		if err := uploadFile(url, localPath, apiToken); err != nil {

@@ -19,8 +19,19 @@ type Backend struct {
 	Timeout        string `yaml:"timeout"`
 }
 
+// FaultSpec is one entry in values.yaml's `faults` map, keyed by target (a
+// backend name, or "default_app"). Zero fields mean "not set" (omitted
+// from the rendered runtime layer, i.e. that dimension stays at baseline).
+type FaultSpec struct {
+	AbortPercent    int `yaml:"abort_percent,omitempty"`
+	AbortStatus     int `yaml:"abort_status,omitempty"`
+	DelayPercent    int `yaml:"delay_percent,omitempty"`
+	DelayDurationMs int `yaml:"delay_duration_ms,omitempty"`
+}
+
 type Values struct {
-	Backends []Backend `yaml:"backends"`
+	Backends []Backend            `yaml:"backends"`
+	Faults   map[string]FaultSpec `yaml:"faults,omitempty"`
 }
 
 // Load reads values.yaml. A missing file is treated as an empty backend

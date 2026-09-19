@@ -54,7 +54,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&valuesPath, "values", envOr("GATEWAYCTL_VALUES", defaultValues),
 		"Path to values.yaml. Defaults to config/values.yaml in the current working directory.")
 	rootCmd.PersistentFlags().StringVar(&renderedDir, "rendered-dir", envOr("GATEWAYCTL_RENDERED_DIR", defaultRendered),
-		"Directory to write rendered cds.yaml/lds.yaml into.")
+		"Directory to write rendered cds.yaml/lds.yaml/runtime.yaml into.")
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", envOr("GATEWAYCTL_CONFIG", settings.DefaultPath()),
 		"Path to gatewayctl's settings file (mode, config_server URL/token, S3 bucket/prefix).")
 }
@@ -66,7 +66,7 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-// regenerate loads values.yaml, renders cds.yaml/lds.yaml, and atomically
+// regenerate loads values.yaml, renders cds.yaml/lds.yaml/runtime.yaml, and atomically
 // writes both into renderedDir. Every mutating command calls this so the
 // rendered output is always in sync with values.yaml on disk.
 func regenerate() (config.Values, error) {
@@ -77,7 +77,7 @@ func regenerate() (config.Values, error) {
 	if err := os.MkdirAll(renderedDir, 0o755); err != nil {
 		return v, err
 	}
-	cds, lds, err := render.Render(v)
+	cds, lds, runtime, err := render.Render(v)
 	if err != nil {
 		return v, err
 	}
@@ -87,7 +87,10 @@ func regenerate() (config.Values, error) {
 	if err := atomicwrite.Write(filepath.Join(renderedDir, "lds.yaml"), lds); err != nil {
 		return v, err
 	}
-	fmt.Printf("Regenerated %s/cds.yaml and lds.yaml\n", renderedDir)
+	if err := atomicwrite.Write(filepath.Join(renderedDir, "runtime.yaml"), runtime); err != nil {
+		return v, err
+	}
+	fmt.Printf("Regenerated %s/cds.yaml, lds.yaml, and runtime.yaml\n", renderedDir)
 	return v, nil
 }
 
@@ -133,7 +136,7 @@ func resolveS3Prefix() string {
 	return appSettings.S3.Prefix
 }
 
-// autoPushIfConfigured pushes the already-rendered cds.yaml/lds.yaml when a
+// autoPushIfConfigured pushes the already-rendered cds.yaml/lds.yaml/runtime.yaml when a
 // mode is configured, via CONFIG_SOURCE_KIND or the settings file's `mode`
 // - the same signal the fetcher (running inside the container) uses to
 // decide where to read config from. This lets add-backend/remove-backend

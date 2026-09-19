@@ -1,8 +1,10 @@
-// Package render builds the CDS/LDS Envoy resources from values.yaml and
-// marshals them to YAML.
+// Package render builds the CDS/LDS/runtime Envoy resources from
+// values.yaml and marshals them to YAML.
 package render
 
 import (
+	"strconv"
+
 	"gopkg.in/yaml.v3"
 
 	"github.com/jecklgamis/envoy-perf-gateway/gatewayctl/internal/config"
@@ -153,15 +155,47 @@ func BuildLDS(v config.Values) ec.LDS {
 	return ec.LDS{Resources: []ec.Listener{listener}}
 }
 
-// Render returns the marshaled cds.yaml and lds.yaml bytes for v.
-func Render(v config.Values) (cds []byte, lds []byte, err error) {
+// BuildRuntime returns the flat set of Envoy runtime key/value overrides
+// for v.Faults, keyed the same way FaultPerRoute wired each route's
+// typed_per_filter_config - so a key here lines up with the runtime key a
+// route actually reads. A zero field in a FaultSpec is omitted rather than
+// written as "0", so it doesn't clobber that dimension's Envoy-side
+// default (0%, i.e. also a no-op) with an explicit override that would
+// need its own cleanup later.
+func BuildRuntime(v config.Values) map[string]string {
+	keys := map[string]string{}
+	for target, f := range v.Faults {
+		abortPercent, abortStatus, delayPercent, delayDuration := ec.FaultRuntimeKeys(target)
+		if f.AbortPercent != 0 {
+			keys[abortPercent] = strconv.Itoa(f.AbortPercent)
+		}
+		if f.AbortStatus != 0 {
+			keys[abortStatus] = strconv.Itoa(f.AbortStatus)
+		}
+		if f.DelayPercent != 0 {
+			keys[delayPercent] = strconv.Itoa(f.DelayPercent)
+		}
+		if f.DelayDurationMs != 0 {
+			keys[delayDuration] = strconv.Itoa(f.DelayDurationMs)
+		}
+	}
+	return keys
+}
+
+// Render returns the marshaled cds.yaml, lds.yaml, and runtime.yaml bytes
+// for v.
+func Render(v config.Values) (cds []byte, lds []byte, runtime []byte, err error) {
 	cds, err = yaml.Marshal(BuildCDS(v))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	lds, err = yaml.Marshal(BuildLDS(v))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return cds, lds, nil
+	runtime, err = yaml.Marshal(BuildRuntime(v))
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return cds, lds, runtime, nil
 }

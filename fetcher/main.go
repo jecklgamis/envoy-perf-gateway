@@ -25,6 +25,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"gopkg.in/yaml.v3"
 )
 
 type source interface {
@@ -126,6 +127,57 @@ func atomicWrite(path string, data []byte) error {
 	return os.Rename(tmpPath, path)
 }
 
+// runtimeManifestFilename is the one file gatewayctl renders/pushes for
+// fault injection - a flat map of Envoy runtime key -> value. Unlike
+// cds.yaml/lds.yaml, Envoy doesn't read it directly: its layered_runtime
+// disk_layer (config/envoy.yaml) expects one regular file per key inside a
+// directory, so expandRuntimeLayer below fans this single manifest out
+// into that directory instead of writing it as-is.
+const runtimeManifestFilename = "runtime.yaml"
+
+// expandRuntimeLayer decodes a runtime.yaml manifest and reconciles dir so
+// it holds exactly one file per key, named after the key with the value as
+// its content. Each write is atomic (temp file + rename), matching
+// atomicWrite elsewhere in this file, and a key removed from the manifest
+// (e.g. after `gatewayctl fault reset`) has its file removed here too, so
+// the disk_layer doesn't keep applying a stale override.
+func expandRuntimeLayer(dir string, content []byte) error {
+	var desired map[string]string
+	if err := yaml.Unmarshal(content, &desired); err != nil {
+		return fmt.Errorf("decoding %s: %w", runtimeManifestFilename, err)
+	}
+
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+
+	existing, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	stale := make(map[string]bool, len(existing))
+	for _, entry := range existing {
+		if !entry.IsDir() {
+			stale[entry.Name()] = true
+		}
+	}
+
+	for key, value := range desired {
+		if err := atomicWrite(filepath.Join(dir, key), []byte(value)); err != nil {
+			return fmt.Errorf("writing runtime key %s: %w", key, err)
+		}
+		delete(stale, key)
+	}
+
+	for key := range stale {
+		if err := os.Remove(filepath.Join(dir, key)); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("removing stale runtime key %s: %w", key, err)
+		}
+	}
+
+	return nil
+}
+
 func envOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -148,7 +200,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("invalid CONFIG_POLL_INTERVAL_SECONDS: %v", err)
 	}
-	files := strings.Split(envOr("CONFIG_FILES", "cds.yaml,lds.yaml"), ",")
+	files := strings.Split(envOr("CONFIG_FILES", "cds.yaml,lds.yaml,runtime.yaml"), ",")
 
 	if info, err := os.Stat(targetDir); err != nil || !info.IsDir() {
 		log.Fatalf("%s does not exist", targetDir)
@@ -177,13 +229,23 @@ func main() {
 				continue
 			}
 
-			targetPath := filepath.Join(targetDir, filename)
-			if err := atomicWrite(targetPath, content); err != nil {
-				logMsg("WARNING", "Failed to write %s: %v", targetPath, err)
+			writeErr := error(nil)
+			if filename == runtimeManifestFilename {
+				runtimeDir := filepath.Join(targetDir, "runtime", "current")
+				if writeErr = expandRuntimeLayer(runtimeDir, content); writeErr == nil {
+					logMsg("INFO", "Fetched %s successfully, updated %s (%d bytes)", filename, runtimeDir, len(content))
+				}
+			} else {
+				targetPath := filepath.Join(targetDir, filename)
+				if writeErr = atomicWrite(targetPath, content); writeErr == nil {
+					logMsg("INFO", "Fetched %s successfully, updated %s (%d bytes)", filename, targetPath, len(content))
+				}
+			}
+			if writeErr != nil {
+				logMsg("WARNING", "Failed to apply %s: %v", filename, writeErr)
 				continue
 			}
 			lastHash[filename] = digest
-			logMsg("INFO", "Fetched %s successfully, updated %s (%d bytes)", filename, targetPath, len(content))
 
 			// CONFIG_FILES defaults to "cds.yaml,lds.yaml" - in that order
 			// on purpose. Envoy reloads each file independently on its own

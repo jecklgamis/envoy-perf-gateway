@@ -11,10 +11,12 @@ restarts and no full xDS control plane.
 
 - **Per-backend fault isolation.** Inject aborts and delays into a single
   backend without affecting any other route.
-- **Live toggling, zero restarts.** Fault injection is controlled through
-  Envoy's admin API, with no redeploy or config reload required.
-- **No xDS control plane required.** Backends are updated dynamically via
-  filesystem-based CDS/LDS and inotify hot-reload.
+- **Live toggling, zero restarts.** Fault injection distributes like a
+  backend change - no redeploy - and converges across every gateway
+  replica, not just whichever one an ad-hoc call happens to reach.
+- **No xDS control plane required.** Backends, routes, and fault injection
+  are all updated dynamically via filesystem-based CDS/LDS/runtime and
+  inotify hot-reload.
 - **A single CLI for the workflow.** Add and remove backends, push
   configuration, and control fault injection, all without hand-editing
   YAML.
@@ -87,11 +89,14 @@ go install github.com/jecklgamis/envoy-perf-gateway/gatewayctl@latest
 curl http://localhost:8080/httpbin/get
 ```
 
-**6. Test fault injection**, scoped to the `httpbin` backend:
+**6. Test fault injection**, scoped to the `httpbin` backend. Like
+`add-backend`, this pushes through the config server, so allow up to
+`CONFIG_POLL_INTERVAL_SECONDS` (15s by default) for the gateway to pick it
+up:
 
 ```bash
 ./gatewayctl fault abort --target httpbin --percent 100 --status 503
-curl http://localhost:8080/httpbin/get     # returns 503
+curl http://localhost:8080/httpbin/get     # returns 503 within ~15s
 curl http://localhost:8080/                # unaffected - still default_app
 
 ./gatewayctl fault delay --target httpbin --percent 100 --duration-ms 2000
@@ -217,8 +222,7 @@ Both accept Envoy duration strings (e.g. `500ms`, `2s`).
 Each route, including the `default_app` fallback, has its own
 independently toggleable fault injection, isolated by a unique Envoy
 runtime key per `--target`. Faulting one backend does not affect any
-other's traffic. Changes are applied live through the Envoy admin API,
-with no config reload, and take effect on the next request:
+other's traffic:
 
 ```bash
 # 30% of backend-1's requests return 503 - backend-2, default_app, etc. are unaffected
@@ -235,9 +239,22 @@ gatewayctl fault abort --target default_app --percent 100 --status 503
 ```
 
 `--target` is the backend's `--name` value, or `default_app` for the
-fallback route. This requires the `layered_runtime.admin` layer in
-`config/envoy.yaml`; without it, `/runtime_modify` returns
-`503 No admin layer specified`.
+fallback route.
+
+Fault state is written to `values.yaml` (a `faults` entry per target) and
+distributed the same way as backends: rendered into `rendered/runtime.yaml`
+and pushed through `config_server`/S3, the same as `cds.yaml`/`lds.yaml`.
+Envoy picks it up via its `layered_runtime` disk layer (see
+`config/envoy.yaml`), so every gateway replica converges on the same fault
+state, and it survives restarts - unlike a one-off admin API call, which
+only ever reached whichever single pod received it. The tradeoff is that a
+change takes effect on the fetcher's next poll (`CONFIG_POLL_INTERVAL_SECONDS`,
+`15s` by default) rather than instantly on the next request. `gatewayctl`
+doesn't expose it, but `layered_runtime` still has an `admin` layer above
+the disk layer, so `curl -X POST http://<admin-host>:9901/runtime_modify?<key>=<value>`
+against a single pod still works for a sub-second, one-off override; it's
+in-memory only and reverts to the persisted state on that pod's next
+restart.
 
 ## Perf Testing
 

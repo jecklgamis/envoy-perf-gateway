@@ -23,6 +23,11 @@ RUN mkdir -p /etc/envoy/dynamic
 # (below) takes over from here at runtime, polling HTTP or S3 and writing
 # into this same directory from inside the container.
 COPY rendered/ /etc/envoy/dynamic/
+# layered_runtime's disk_layer (config/envoy.yaml) reads one file per
+# runtime key from here; empty until config-fetcher expands the first
+# rendered/runtime.yaml it fetches, which is the correct baseline (no
+# fault overrides) for a fresh image.
+RUN mkdir -p /etc/envoy/dynamic/runtime/current
 
 RUN mkdir -p /fetcher
 COPY --from=builder /out/fetcher /fetcher/fetcher

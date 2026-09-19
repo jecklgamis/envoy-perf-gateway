@@ -16,15 +16,30 @@ so Envoy never notices the change even though the file is correct.
 
 To work around this, the `fetcher/` binary (a statically linked Go binary)
 runs inside the container, managed by `supervisor.ini`, and polls a remote
-source for `cds.yaml`/`lds.yaml`. It writes them into `/etc/envoy/dynamic`
-itself, a write native to the container's own filesystem, which does
-trigger Envoy's inotify watch. `gatewayctl` on the host only ever writes to
-`config/values.yaml` and the local `rendered/` directory; it never touches
-the container's filesystem directly.
+source for `cds.yaml`/`lds.yaml`/`runtime.yaml`. It writes them into
+`/etc/envoy/dynamic` itself, a write native to the container's own
+filesystem, which does trigger Envoy's inotify watch. `gatewayctl` on the
+host only ever writes to `config/values.yaml` and the local `rendered/`
+directory; it never touches the container's filesystem directly.
 
 Both `gatewayctl` and the fetcher write atomically (temp file, then
 rename, rather than delete-then-write), so a reader never observes a
 missing or partial file mid-swap.
+
+Fault injection (`gatewayctl fault ...`) rides this same pipeline instead
+of a separate one. Fault state lives in `values.yaml`'s `faults` map,
+renders to a flat key/value `runtime.yaml`, and distributes like any other
+file above. Envoy doesn't read that manifest directly, though: its
+`layered_runtime` has a `disk_layer` (`config/envoy.yaml`) that expects one
+regular file per runtime key inside a directory, so the fetcher expands
+`runtime.yaml` into `/etc/envoy/dynamic/runtime/current/<key>` files -
+writing changed keys and removing ones no longer in the manifest - rather
+than writing it as a single file the way it does for `cds.yaml`/`lds.yaml`.
+This is what lets multiple gateway replicas converge on the same fault
+state and survive restarts, instead of a fault existing only in one Envoy
+process's in-memory admin layer. A `layered_runtime.admin` layer still sits
+above the disk layer, so a direct `POST /runtime_modify` against a single
+pod's admin API still works for instant, ad-hoc overrides.
 
 ## Config Distribution
 
@@ -39,7 +54,7 @@ endpoint.
 The fetcher polls `config_server`, a small Go HTTP service with its own
 `storage/` directory. It has its own `Dockerfile`/`Makefile` and is
 deployable as its own service. `gatewayctl push-http` uploads
-`rendered/cds.yaml`/`lds.yaml` to it over HTTP POST. The server does not
+`rendered/cds.yaml`/`lds.yaml`/`runtime.yaml` to it over HTTP POST. The server does not
 need to be colocated with `gatewayctl`; anywhere reachable over HTTP
 works, which is what makes this option cloud-agnostic (no dependency on
 AWS or any other specific provider). Access is optionally gated by

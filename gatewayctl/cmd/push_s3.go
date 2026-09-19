@@ -20,8 +20,8 @@ var (
 
 var pushS3Cmd = &cobra.Command{
 	Use:   "push-s3",
-	Short: "Upload rendered cds.yaml and lds.yaml to S3 for the in-container fetcher to pick up",
-	Long: `Upload rendered cds.yaml and lds.yaml to S3 for the in-container
+	Short: "Upload rendered cds.yaml, lds.yaml, and runtime.yaml to S3 for the in-container fetcher to pick up",
+	Long: `Upload rendered cds.yaml, lds.yaml, and runtime.yaml to S3 for the in-container
 fetcher to pick up (CONFIG_SOURCE_KIND=s3). Regenerates first.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		bucket := psBucket
@@ -42,7 +42,7 @@ fetcher to pick up (CONFIG_SOURCE_KIND=s3). Regenerates first.`,
 	},
 }
 
-// pushS3Files uploads the already-rendered cds.yaml/lds.yaml. Callers that
+// pushS3Files uploads the already-rendered cds.yaml/lds.yaml/runtime.yaml. Callers that
 // need a fresh render first (the push-s3 command, invoked standalone) call
 // regenerate() themselves before this.
 func pushS3Files(bucket, prefix string) error {
@@ -54,7 +54,7 @@ func pushS3Files(bucket, prefix string) error {
 	client := s3.NewFromConfig(cfg)
 	prefix = strings.TrimLeft(prefix, "/")
 
-	for _, filename := range []string{"cds.yaml", "lds.yaml"} {
+	for _, filename := range []string{"cds.yaml", "lds.yaml", "runtime.yaml"} {
 		localPath := filepath.Join(renderedDir, filename)
 		f, err := os.Open(localPath)
 		if err != nil {
