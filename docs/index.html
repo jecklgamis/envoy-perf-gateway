@@ -501,6 +501,12 @@ gatewayctl add-backend \
 curl -H "Host: frontend-a.test.local" http://localhost:8080/
 curl -H "Host: frontend-b.test.local" http://localhost:8080/api/anything</code></pre>
       <p><code>--domain</code> alone routes all traffic under that Host header to the backend. Combined with <code>--route-prefix</code>, only that path prefix under the domain is routed. If neither flag is set, the backend still registers a cluster without a route.</p>
+
+      <h3>Host Header Rewriting</h3>
+      <p><code>--host-header</code> overrides the <code>Host</code> header sent to the upstream. This matters for any backend - Cloudflare-fronted ones especially - that rejects a request whose <code>Host</code> header doesn't match the TLS SNI/cert:</p>
+<pre><code>gatewayctl add-backend --name serverprobes --host www.serverprobes.com --port 443 --tls \
+  --route-prefix /serverprobes/ --host-header www.serverprobes.com</code></pre>
+      <div class="note"><code>--host</code> (and TLS SNI) control where and how Envoy connects to the upstream; <code>--host-header</code> controls what the upstream actually sees in the request itself. Without it, the upstream receives the gateway's own inbound <code>Host</code> header unchanged - fine for a backend like <code>httpbin.org</code> that doesn't validate it, but rejected outright (<code>421 Misdirected Request</code>) by anything that does.</div>
     </section>
 
     <section id="timeouts">

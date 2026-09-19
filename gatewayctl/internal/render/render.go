@@ -85,7 +85,7 @@ func BuildLDS(v config.Values) ec.LDS {
 			if b.RoutePrefix != "" {
 				prefix = b.RoutePrefix
 			}
-			action := ec.RouteAction{Cluster: b.Name, Timeout: b.Timeout}
+			action := ec.RouteAction{Cluster: b.Name, Timeout: b.Timeout, HostRewriteLiteral: b.HostRewrite}
 			if b.RoutePrefix != "" {
 				action.PrefixRewrite = "/"
 			}
@@ -99,7 +99,7 @@ func BuildLDS(v config.Values) ec.LDS {
 		case b.RoutePrefix != "":
 			catchAllRoutes = append(catchAllRoutes, ec.Route{
 				Match:                ec.RouteMatch{Prefix: b.RoutePrefix},
-				Route:                ec.RouteAction{Cluster: b.Name, PrefixRewrite: "/", Timeout: b.Timeout},
+				Route:                ec.RouteAction{Cluster: b.Name, PrefixRewrite: "/", HostRewriteLiteral: b.HostRewrite, Timeout: b.Timeout},
 				TypedPerFilterConfig: ec.FaultPerRoute(b.Name),
 			})
 		}

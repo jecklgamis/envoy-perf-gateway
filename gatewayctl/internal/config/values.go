@@ -15,6 +15,7 @@ type Backend struct {
 	TLS            bool   `yaml:"tls"`
 	Domain         string `yaml:"domain,omitempty"`
 	RoutePrefix    string `yaml:"route_prefix,omitempty"`
+	HostRewrite    string `yaml:"host_rewrite,omitempty"`
 	ConnectTimeout string `yaml:"connect_timeout"`
 	Timeout        string `yaml:"timeout"`
 }

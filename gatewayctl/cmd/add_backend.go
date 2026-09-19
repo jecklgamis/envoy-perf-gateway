@@ -16,6 +16,7 @@ var (
 	abTLS            bool
 	abDomain         string
 	abRoutePrefix    string
+	abHostRewrite    string
 	abConnectTimeout string
 	abTimeout        string
 )
@@ -46,6 +47,7 @@ var addBackendCmd = &cobra.Command{
 			TLS:            abTLS,
 			Domain:         abDomain,
 			RoutePrefix:    abRoutePrefix,
+			HostRewrite:    abHostRewrite,
 			ConnectTimeout: abConnectTimeout,
 			Timeout:        abTimeout,
 		})
@@ -63,6 +65,9 @@ var addBackendCmd = &cobra.Command{
 		}
 		if abRoutePrefix != "" {
 			routedVia = append(routedVia, "prefix "+abRoutePrefix)
+		}
+		if abHostRewrite != "" {
+			routedVia = append(routedVia, "Host header "+abHostRewrite)
 		}
 		msg := fmt.Sprintf("Added backend '%s' -> %s:%d", abName, abHost, abPort)
 		if len(routedVia) > 0 {
@@ -87,6 +92,13 @@ func init() {
 	addBackendCmd.Flags().StringVar(&abRoutePrefix, "route-prefix", "",
 		"Path prefix routed to this backend (rewritten to /). Omit (with no --domain "+
 			"either) to only add the cluster without a route.")
+	addBackendCmd.Flags().StringVar(&abHostRewrite, "host-header", "",
+		"Overrides the Host header sent to the upstream, e.g. the backend's own "+
+			"hostname. Needed for backends (Cloudflare-fronted ones especially) that "+
+			"reject a request whose Host header doesn't match the TLS SNI/cert - "+
+			"--host set instead controls the SNI at connect time, this controls what "+
+			"the upstream actually sees in the request itself. Omit to pass the "+
+			"gateway's own inbound Host header through unchanged.")
 	addBackendCmd.Flags().StringVar(&abConnectTimeout, "connect-timeout", "5s", "")
 	addBackendCmd.Flags().StringVar(&abTimeout, "timeout", "15s", "")
 

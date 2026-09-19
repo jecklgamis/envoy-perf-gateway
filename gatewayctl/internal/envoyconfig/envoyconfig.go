@@ -70,9 +70,10 @@ type RouteMatch struct {
 }
 
 type RouteAction struct {
-	Cluster       string `yaml:"cluster"`
-	PrefixRewrite string `yaml:"prefix_rewrite,omitempty"`
-	Timeout       string `yaml:"timeout"`
+	Cluster            string `yaml:"cluster"`
+	PrefixRewrite      string `yaml:"prefix_rewrite,omitempty"`
+	HostRewriteLiteral string `yaml:"host_rewrite_literal,omitempty"`
+	Timeout            string `yaml:"timeout"`
 }
 
 // TypedPerFilterConfig keys are http_filters[].name values (e.g.
