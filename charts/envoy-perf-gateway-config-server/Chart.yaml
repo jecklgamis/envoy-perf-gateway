@@ -1,0 +1,11 @@
+apiVersion: v2
+name: envoy-perf-gateway-config-server
+description: Standalone config distribution server for envoy-perf-gateway - stores rendered cds.yaml/lds.yaml/runtime.yaml and serves them to the gateway's in-container fetcher over HTTP.
+type: application
+version: 0.1.0
+appVersion: "v1.0.0-alpha.1"
+home: https://github.com/jecklgamis/envoy-perf-gateway
+sources:
+  - https://github.com/jecklgamis/envoy-perf-gateway
+maintainers:
+  - name: jecklgamis

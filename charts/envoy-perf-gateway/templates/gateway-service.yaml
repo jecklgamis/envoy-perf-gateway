@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "envoy-perf-gateway.gateway.fullname" . }}
+  name: {{ include "envoy-perf-gateway.fullname" . }}
   labels:
-    {{- include "envoy-perf-gateway.gateway.labels" . | nindent 4 }}
+    {{- include "envoy-perf-gateway.labels" . | nindent 4 }}
 spec:
   type: {{ .Values.gateway.service.type }}
   ports:
@@ -16,4 +16,4 @@ spec:
       targetPort: admin
       protocol: TCP
   selector:
-    {{- include "envoy-perf-gateway.gateway.selectorLabels" . | nindent 4 }}
+    {{- include "envoy-perf-gateway.selectorLabels" . | nindent 4 }}

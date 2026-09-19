@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "envoy-perf-gateway-config-server.fullname" . }}
+  labels:
+    {{- include "envoy-perf-gateway-config-server.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "envoy-perf-gateway-config-server.selectorLabels" . | nindent 6 }}
+  strategy:
+    # ReadWriteOnce storage/ volume - avoid two writers.
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        {{- include "envoy-perf-gateway-config-server.labels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: config-server
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: 8090
+              protocol: TCP
+          env:
+            - name: API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  {{- if .Values.apiTokenExistingSecret.name }}
+                  name: {{ .Values.apiTokenExistingSecret.name }}
+                  key: {{ .Values.apiTokenExistingSecret.key }}
+                  {{- else }}
+                  name: {{ include "envoy-perf-gateway-config-server.fullname" . }}
+                  key: api-token
+                  {{- end }}
+            - name: CONFIG_SERVER_STORAGE_DIR
+              value: /data
+          volumeMounts:
+            - name: storage
+              mountPath: /data
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: storage
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default (include "envoy-perf-gateway-config-server.fullname" .) }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -1,21 +1,29 @@
-{{- if and (eq .Values.configSourceKind "s3") (not .Values.gateway.s3.bucket) }}
-{{- fail "gateway.s3.bucket is required when configSourceKind=s3" }}
+{{- if eq .Values.gateway.configSourceKind "http" }}
+{{- if not .Values.gateway.configSourceUrl }}
+{{- fail "gateway.configSourceUrl is required when gateway.configSourceKind=http - install the envoy-perf-gateway-config-server chart (or point at an existing one) and set this to its address" }}
+{{- end }}
+{{- else if eq .Values.gateway.configSourceKind "s3" }}
+{{- if not .Values.gateway.s3.bucket }}
+{{- fail "gateway.s3.bucket is required when gateway.configSourceKind=s3" }}
+{{- end }}
+{{- else }}
+{{- fail (printf "unsupported gateway.configSourceKind: %s (want \"http\" or \"s3\")" .Values.gateway.configSourceKind) }}
 {{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "envoy-perf-gateway.gateway.fullname" . }}
+  name: {{ include "envoy-perf-gateway.fullname" . }}
   labels:
-    {{- include "envoy-perf-gateway.gateway.labels" . | nindent 4 }}
+    {{- include "envoy-perf-gateway.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.gateway.replicaCount }}
   selector:
     matchLabels:
-      {{- include "envoy-perf-gateway.gateway.selectorLabels" . | nindent 6 }}
+      {{- include "envoy-perf-gateway.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "envoy-perf-gateway.gateway.labels" . | nindent 8 }}
+        {{- include "envoy-perf-gateway.labels" . | nindent 8 }}
       {{- with .Values.gateway.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
@@ -42,10 +50,10 @@ spec:
               protocol: TCP
           env:
             - name: CONFIG_SOURCE_KIND
-              value: {{ .Values.configSourceKind | quote }}
-            {{- if eq .Values.configSourceKind "http" }}
+              value: {{ .Values.gateway.configSourceKind | quote }}
+            {{- if eq .Values.gateway.configSourceKind "http" }}
             - name: CONFIG_SOURCE_URL
-              value: {{ .Values.gateway.configSourceUrl | default (include "envoy-perf-gateway.configServer.url" .) | quote }}
+              value: {{ .Values.gateway.configSourceUrl | quote }}
             - name: CONFIG_API_TOKEN
               valueFrom:
                 secretKeyRef:
@@ -53,7 +61,7 @@ spec:
                   name: {{ .Values.gateway.configApiTokenExistingSecret.name }}
                   key: {{ .Values.gateway.configApiTokenExistingSecret.key }}
                   {{- else }}
-                  name: {{ include "envoy-perf-gateway.gateway.fullname" . }}
+                  name: {{ include "envoy-perf-gateway.fullname" . }}
                   key: config-api-token
                   {{- end }}
             {{- else }}

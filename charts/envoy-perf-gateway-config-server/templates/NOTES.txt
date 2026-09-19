@@ -1,0 +1,19 @@
+envoy-perf-gateway-config-server has been deployed.
+
+Service: {{ include "envoy-perf-gateway-config-server.fullname" . }}
+  http: port {{ .Values.service.port }}
+
+Point a gateway at it (from the envoy-perf-gateway chart, or gatewayctl
+directly) using its in-cluster address:
+
+  http://{{ include "envoy-perf-gateway-config-server.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
+
+  # e.g. when installing the gateway chart in the same namespace:
+  helm install my-gateway envoy-perf-gateway/envoy-perf-gateway \
+    --set gateway.configSourceUrl=http://{{ include "envoy-perf-gateway-config-server.fullname" . }}:{{ .Values.service.port }} \
+    --set gateway.configApiToken=<same token as this release>
+
+To reach it from outside the cluster (e.g. to run gatewayctl push-http
+from your workstation):
+
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "envoy-perf-gateway-config-server.fullname" . }} 8090:{{ .Values.service.port }}

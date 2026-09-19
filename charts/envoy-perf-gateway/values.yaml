@@ -1,9 +1,9 @@
 # Default values for envoy-perf-gateway.
-
-# -- Distribution mode shared by both components: "http" (talk to the
-# bundled config server) or "s3" (poll an S3 bucket instead). "http" also
-# determines whether the configServer sub-component is deployed.
-configSourceKind: http
+#
+# config_server is a separate chart (envoy-perf-gateway-config-server) -
+# install it independently and point gateway.configSourceUrl at it, or
+# point gatewayctl at it directly. See that chart's NOTES.txt for the
+# in-cluster address to use.
 
 gateway:
   image:
@@ -18,13 +18,18 @@ gateway:
     httpPort: 8080
     adminPort: 9901
 
-  # -- Required when configSourceKind=http. Defaults to the in-cluster
-  # config server Service created by this chart when configServer.enabled
-  # is true; set explicitly to point at an external one instead.
+  # -- "http" (talk to a config_server) or "s3" (poll an S3 bucket
+  # instead).
+  configSourceKind: http
+
+  # -- Base URL of a config_server instance - e.g. the Service address
+  # from installing the envoy-perf-gateway-config-server chart
+  # separately, such as http://my-config-server:8090. Required when
+  # configSourceKind=http.
   configSourceUrl: ""
 
-  # -- Bearer token sent to the config server. Required when the config
-  # server has apiToken set. Prefer configApiTokenExistingSecret in
+  # -- Bearer token sent to the config server. Must match that
+  # deployment's apiToken. Prefer configApiTokenExistingSecret in
   # anything beyond local/dev use.
   configApiToken: ""
   # -- Existing Secret {name, key} to source the token from instead of
@@ -48,51 +53,6 @@ gateway:
   # requests:
   #   cpu: 100m
   #   memory: 128Mi
-
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
-  podAnnotations: {}
-  podSecurityContext: {}
-  securityContext: {}
-
-configServer:
-  # -- Deploy the bundled config server. Ignored (treated as false) unless
-  # configSourceKind is "http".
-  enabled: true
-
-  image:
-    repository: jecklgamis/envoy-perf-gateway-config-server
-    tag: ""  # defaults to .Chart.AppVersion
-    pullPolicy: IfNotPresent
-
-  replicaCount: 1
-
-  service:
-    type: ClusterIP
-    port: 8090
-
-  # -- Required; the server refuses to start without it. Prefer
-  # apiTokenExistingSecret in anything beyond local/dev use.
-  apiToken: ""
-  # -- Existing Secret {name, key} to source the token from instead of
-  # apiToken.
-  apiTokenExistingSecret: {}
-  # name: ""
-  # key: ""
-
-  persistence:
-    # -- Persists uploaded cds.yaml/lds.yaml across restarts. Disable only
-    # for ephemeral/dev use - a pod restart with this off loses pushed
-    # config until the next add-backend/remove-backend.
-    enabled: true
-    size: 1Gi
-    storageClassName: ""
-    accessModes:
-      - ReadWriteOnce
-    existingClaim: ""
-
-  resources: {}
 
   nodeSelector: {}
   tolerations: []

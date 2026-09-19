@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "envoy-perf-gateway-config-server.fullname" . }}
+  labels:
+    {{- include "envoy-perf-gateway-config-server.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "envoy-perf-gateway-config-server.selectorLabels" . | nindent 4 }}
