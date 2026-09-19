@@ -1,8 +1,8 @@
 BINARY := gatewayctl
 DIST := dist
 
-default:
-	@cat ./Makefile
+.DEFAULT_GOAL := build
+
 # Builds a binary for your current OS/arch.
 build:
 	go build -o $(BINARY) .

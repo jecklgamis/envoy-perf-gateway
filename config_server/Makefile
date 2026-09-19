@@ -6,8 +6,8 @@ IMAGE_TAG:=$(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo local)
 # outside local dev).
 API_TOKEN?=default
 
-default:
-	@cat ./Makefile
+.DEFAULT_GOAL := image
+
 image:
 	docker build -t $(IMAGE_NAME):$(IMAGE_TAG) .
 # storage/ persists uploaded configs across container restarts.
