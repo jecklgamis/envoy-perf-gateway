@@ -126,10 +126,14 @@ go install github.com/jecklgamis/envoy-perf-gateway/gatewayctl@latest
 
 ## Running From Source
 
-**HTTP source:**
+**HTTP source** (each command runs in the foreground - use a separate
+terminal for each):
 
 ```bash
+# terminal 1
 make -C config_server up
+
+# terminal 2
 make up
 ```
 
