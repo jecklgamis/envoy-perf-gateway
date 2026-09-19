@@ -204,6 +204,20 @@ Combined with `--route-prefix`, only that path prefix under the domain is
 routed. If neither flag is set, the backend still registers a cluster
 without a route.
 
+### Timeouts
+
+`--connect-timeout` and `--timeout` control how long Envoy waits on the
+upstream connection and on the overall request, respectively:
+
+```bash
+gatewayctl add-backend --name slow-svc --host slow-svc.internal --port 8080 \
+  --route-prefix /slow/ --connect-timeout 2s --timeout 30s
+```
+
+`--connect-timeout` sets the cluster's connect timeout and defaults to
+`5s`. `--timeout` sets the route's request timeout and defaults to `15s`.
+Both accept Envoy duration strings (e.g. `500ms`, `2s`).
+
 ## Fault Injection
 
 Each route, including the `default_app` fallback, has its own
@@ -231,7 +245,48 @@ fallback route. This requires the `layered_runtime.admin` layer in
 `config/envoy.yaml`; without it, `/runtime_modify` returns
 `503 No admin layer specified`.
 
-Run a load test (for example, [fortio](https://github.com/fortio/fortio))
-against `http://localhost:8080/` while toggling these settings to observe
-how client-side retry, timeout, and circuit-breaker behavior holds up
-under a degraded upstream.
+## Run Perf Test
+
+Point a load generator at `http://localhost:8080/` (or a routed backend
+path) while toggling fault injection to observe how client-side retry,
+timeout, and circuit-breaker behavior holds up under a degraded upstream.
+
+**[k6](https://k6.io)** - scriptable, with pass/fail thresholds and
+detailed reporting:
+
+```bash
+cat <<'EOF' > script.js
+import http from 'k6/http';
+import { check } from 'k6';
+
+export const options = {
+  vus: 50,
+  duration: '30s',
+  thresholds: {
+    http_req_duration: ['p(95)<500'],
+    http_req_failed: ['rate<0.01'],
+  },
+};
+
+export default function () {
+  const res = http.get('http://localhost:8080/httpbin/get');
+  check(res, { 'status is 200': (r) => r.status === 200 });
+}
+EOF
+
+k6 run script.js
+```
+
+**[oha](https://github.com/hatoo/oha)** - single binary, no script
+needed, handy for a quick smoke test:
+
+```bash
+oha -z 30s -c 50 http://localhost:8080/httpbin/get
+```
+
+**[fortio](https://github.com/fortio/fortio)** is another good option,
+especially if you also want a built-in web UI for live results:
+
+```bash
+fortio load -qps 100 -t 30s http://localhost:8080/httpbin/get
+```
