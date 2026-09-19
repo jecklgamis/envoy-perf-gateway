@@ -395,6 +395,7 @@
         <p>In its own terminal. This works even if the config server isn't up yet — it serves a built-in default configuration meanwhile.</p>
 <pre><code><span class="cmt"># pulls the published image and runs it, pointed at a local config server</span>
 docker pull jecklgamis/envoy-perf-gateway:latest
+docker rm -f envoy-perf-gateway 2&gt;/dev/null
 docker run --name envoy-perf-gateway -p 8080:8080 -p 9901:9901 \
   -e CONFIG_SOURCE_KIND=http \
   -e CONFIG_SOURCE_URL=http://host.docker.internal:8090 \
@@ -406,6 +407,7 @@ docker run --name envoy-perf-gateway -p 8080:8080 -p 9901:9901 \
         <h4><span class="num">2</span> Start the config server</h4>
         <p>In a separate terminal.</p>
 <pre><code>docker pull jecklgamis/envoy-perf-gateway-config-server:latest
+docker rm -f envoy-perf-gateway-config-server 2&gt;/dev/null
 docker run --name envoy-perf-gateway-config-server -p 8090:8090 \
   -e API_TOKEN=default \
   jecklgamis/envoy-perf-gateway-config-server:latest</code></pre>
@@ -633,6 +635,15 @@ helm install my-gateway . \
 
     <section id="troubleshooting">
       <h2>Troubleshooting</h2>
+
+      <h3><code>docker run</code> fails with "Conflict. The container name ... is already in use"</h3>
+      <p>A container with that name already exists from a previous run - <code>docker run --name</code> requires unique names. Either reuse it or remove it first:</p>
+<pre><code><span class="cmt"># remove the old container, then re-run the original docker run command</span>
+docker rm -f envoy-perf-gateway
+
+<span class="cmt"># or just start the existing one instead</span>
+docker start envoy-perf-gateway</code></pre>
+      <p>The Quickstart's own commands now do this <code>docker rm -f</code> for you before each <code>docker run</code>, so copy-pasting the same block twice just works. You'll still hit this if you type a bare <code>docker run</code> yourself, or use <code>make run</code>/<code>make up</code> (see <a href="#from-source">Running From Source</a>) alongside a container already started from the Quickstart.</p>
 
       <h3>"No admin layer specified" on <code>fault</code> commands</h3>
       <p>Requires the <code>layered_runtime.admin</code> layer in <code>config/envoy.yaml</code>. Without it, Envoy's <code>/runtime_modify</code> refuses with <code>503 No admin layer specified</code>.</p>

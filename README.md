@@ -41,6 +41,7 @@ configuration in the meantime:
 
 ```bash
 docker pull jecklgamis/envoy-perf-gateway:latest
+docker rm -f envoy-perf-gateway 2>/dev/null
 docker run --name envoy-perf-gateway -p 8080:8080 -p 9901:9901 \
   -e CONFIG_SOURCE_KIND=http \
   -e CONFIG_SOURCE_URL=http://host.docker.internal:8090 \
@@ -52,6 +53,7 @@ docker run --name envoy-perf-gateway -p 8080:8080 -p 9901:9901 \
 
 ```bash
 docker pull jecklgamis/envoy-perf-gateway-config-server:latest
+docker rm -f envoy-perf-gateway-config-server 2>/dev/null
 docker run --name envoy-perf-gateway-config-server -p 8090:8090 \
   -e API_TOKEN=default \
   jecklgamis/envoy-perf-gateway-config-server:latest
