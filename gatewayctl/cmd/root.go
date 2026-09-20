@@ -1,12 +1,15 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"time"
 
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/spf13/cobra"
 
 	"github.com/jecklgamis/envoy-perf-gateway/gatewayctl/internal/atomicwrite"
@@ -220,6 +223,23 @@ func resolveS3Prefix() string {
 		return v
 	}
 	return appSettings.S3.Prefix
+}
+
+// newS3Client loads the default AWS config/credential chain and returns an
+// S3 client. S3_FORCE_PATH_STYLE=true switches to path-style addressing,
+// needed only against an S3-compatible endpoint (e.g. MinIO in the
+// integration test, via AWS_ENDPOINT_URL_S3) - real AWS S3 doesn't need or
+// want this.
+func newS3Client(ctx context.Context) (*s3.Client, error) {
+	cfg, err := awsconfig.LoadDefaultConfig(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("loading AWS config: %w", err)
+	}
+	return s3.NewFromConfig(cfg, func(o *s3.Options) {
+		if os.Getenv("S3_FORCE_PATH_STYLE") == "true" {
+			o.UsePathStyle = true
+		}
+	}), nil
 }
 
 // autoPushIfConfigured pushes the already-rendered cds.yaml/lds.yaml/runtime.yaml when a

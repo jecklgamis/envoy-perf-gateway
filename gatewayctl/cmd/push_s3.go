@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/spf13/cobra"
 )
@@ -47,11 +46,10 @@ fetcher to pick up (CONFIG_SOURCE_KIND=s3). Regenerates first.`,
 // regenerate() themselves before this.
 func pushS3Files(bucket, prefix string) error {
 	ctx := context.Background()
-	cfg, err := awsconfig.LoadDefaultConfig(ctx)
+	client, err := newS3Client(ctx)
 	if err != nil {
-		return fmt.Errorf("loading AWS config: %w", err)
+		return err
 	}
-	client := s3.NewFromConfig(cfg)
 	prefix = strings.TrimLeft(prefix, "/")
 
 	for _, filename := range []string{"cds.yaml", "lds.yaml", "runtime.yaml"} {

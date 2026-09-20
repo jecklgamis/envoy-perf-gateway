@@ -101,7 +101,14 @@ func buildSource(kind string) (source, error) {
 		return &s3Source{
 			bucket: bucket,
 			prefix: strings.TrimLeft(os.Getenv("CONFIG_S3_PREFIX"), "/"),
-			client: s3.NewFromConfig(cfg),
+			client: s3.NewFromConfig(cfg, func(o *s3.Options) {
+				// Only needed against an S3-compatible endpoint (e.g. MinIO
+				// in the integration test) via AWS_ENDPOINT_URL_S3 - real
+				// AWS S3 doesn't need or want this.
+				if os.Getenv("S3_FORCE_PATH_STYLE") == "true" {
+					o.UsePathStyle = true
+				}
+			}),
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported CONFIG_SOURCE_KIND: %s", kind)

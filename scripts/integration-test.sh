@@ -29,6 +29,19 @@ WORKDIR="$(mktemp -d)"
 HTTP_PORT=18280
 ADMIN_PORT=19291
 
+# S3 phase (see "S3 distribution mode" section below) - a separate
+# container/network/MinIO stack, distinct ports and names so it can't
+# collide with the http-mode phase above.
+NETWORK_NAME="envoy-perf-gateway-integration-test-net"
+MINIO_CONTAINER="envoy-perf-gateway-integration-test-minio"
+S3_CONTAINER="envoy-perf-gateway-integration-test-s3"
+S3_HTTP_PORT=18380
+S3_ADMIN_PORT=19392
+MINIO_API_PORT=19502
+S3_BUCKET="gatewayctl-integration-test"
+S3_ACCESS_KEY="minioadmin"
+S3_SECRET_KEY="minioadmin"
+
 # CRITICAL: without this, gatewayctl falls back to
 # ~/.config/gatewayctl/config.yaml - whoever's real settings file that
 # happens to be, on whatever machine runs this script. If that file has a
@@ -44,7 +57,8 @@ export GATEWAYCTL_CONFIG="$WORKDIR/gatewayctl-settings.yaml"
 
 cleanup() {
   local exit_code=$?
-  docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+  docker rm -f "$CONTAINER_NAME" "$S3_CONTAINER" "$MINIO_CONTAINER" >/dev/null 2>&1 || true
+  docker network rm "$NETWORK_NAME" >/dev/null 2>&1 || true
   docker rmi "$IMAGE_TAG" >/dev/null 2>&1 || true
   rm -rf "$WORKDIR" "$PWD/rendered"
   exit "$exit_code"
@@ -160,6 +174,124 @@ pass "gzip compression does not leak to a route that didn't opt in"
 code="$(curl -s -o /dev/null -w '%{http_code}' -H "Host: vhost.integration-test.local" "http://localhost:$HTTP_PORT/api/get")"
 [ "$code" = "200" ] || fail "domain+prefix virtual host route: got $code, want 200"
 pass "domain+prefix virtual host route serves 200"
+
+echo
+echo "--- S3 distribution mode: gatewayctl push-s3 -> fetcher poll -> Envoy hot-reload ---"
+# Everything above bakes rendered/ straight into the image and never
+# exercises the config-distribution pipeline at all. This phase is the one
+# that actually proves push-s3 and the in-container fetcher's S3 poller
+# work end to end, against a local MinIO standing in for real AWS S3 (no
+# cloud dependency, no credentials to manage in CI) - the same bug class
+# the http-mode phase above catches for rendering, but for the S3 code
+# path in fetcher/main.go and gatewayctl/cmd/{push_s3,fetch}.go instead.
+docker network create "$NETWORK_NAME" >/dev/null
+
+docker run -d --name "$MINIO_CONTAINER" --network "$NETWORK_NAME" \
+  -p "$MINIO_API_PORT:9000" \
+  -e "MINIO_ROOT_USER=$S3_ACCESS_KEY" -e "MINIO_ROOT_PASSWORD=$S3_SECRET_KEY" \
+  quay.io/minio/minio server /data >/dev/null
+
+echo "--- Waiting for MinIO to come up ---"
+for i in $(seq 1 30); do
+  if curl -s -o /dev/null "http://localhost:$MINIO_API_PORT/minio/health/ready"; then
+    break
+  fi
+  if [ "$i" = 30 ]; then
+    fail "MinIO never came up"
+  fi
+  sleep 1
+done
+
+echo "--- Creating the test bucket ---"
+docker run --rm --network "$NETWORK_NAME" \
+  -e "MC_HOST_local=http://${S3_ACCESS_KEY}:${S3_SECRET_KEY}@${MINIO_CONTAINER}:9000" \
+  quay.io/minio/mc mb "local/$S3_BUCKET" >/dev/null
+
+echo "--- Pushing a values.yaml to S3 via gatewayctl push-s3 ---"
+S3_VALUES="$WORKDIR/s3-values.yaml"
+S3_RENDERED="$WORKDIR/s3-rendered"
+mkdir -p "$S3_RENDERED"
+export AWS_ACCESS_KEY_ID="$S3_ACCESS_KEY" AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY"
+export AWS_REGION=us-east-1
+export AWS_ENDPOINT_URL_S3="http://localhost:$MINIO_API_PORT"
+export S3_FORCE_PATH_STYLE=true
+
+"$GATEWAY_BIN" add-backend --name s3test --host httpbin.org --port 443 --tls \
+  --route-prefix /s3test/ --compression gzip \
+  --values "$S3_VALUES" --rendered-dir "$S3_RENDERED" --force
+"$GATEWAY_BIN" push-s3 --bucket "$S3_BUCKET" --prefix "" \
+  --values "$S3_VALUES" --rendered-dir "$S3_RENDERED"
+pass "gatewayctl push-s3 uploaded cds/lds/runtime to MinIO"
+
+unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_REGION AWS_ENDPOINT_URL_S3 S3_FORCE_PATH_STYLE
+
+echo "--- Starting the gateway container in S3 mode, pointed at MinIO ---"
+docker rm -f "$S3_CONTAINER" >/dev/null 2>&1 || true
+docker run -d --name "$S3_CONTAINER" --network "$NETWORK_NAME" \
+  -p "$S3_HTTP_PORT:8080" -p "$S3_ADMIN_PORT:9901" \
+  -e CONFIG_SOURCE_KIND=s3 \
+  -e CONFIG_S3_BUCKET="$S3_BUCKET" \
+  -e CONFIG_S3_PREFIX="" \
+  -e CONFIG_POLL_INTERVAL_SECONDS=2 \
+  -e AWS_ACCESS_KEY_ID="$S3_ACCESS_KEY" -e AWS_SECRET_ACCESS_KEY="$S3_SECRET_KEY" \
+  -e AWS_REGION=us-east-1 \
+  -e "AWS_ENDPOINT_URL_S3=http://${MINIO_CONTAINER}:9000" \
+  -e S3_FORCE_PATH_STYLE=true \
+  "$IMAGE_TAG" >/dev/null
+
+echo "--- Waiting for Envoy admin to come up (S3 mode) ---"
+for i in $(seq 1 30); do
+  if curl -s -o /dev/null "http://localhost:$S3_ADMIN_PORT/ready"; then
+    break
+  fi
+  if [ "$i" = 30 ]; then
+    fail "Envoy admin never came up (S3 mode)"
+  fi
+  sleep 1
+done
+
+echo "--- Waiting for the fetcher's first poll to land the S3-pushed config ---"
+for i in $(seq 1 15); do
+  if curl -s "http://localhost:$S3_ADMIN_PORT/clusters" | grep -q '^s3test::'; then
+    break
+  fi
+  if [ "$i" = 15 ]; then
+    docker logs "$S3_CONTAINER" 2>&1 | tail -30
+    fail "s3test cluster never appeared - fetcher didn't pick up the S3-pushed config (see logs above)"
+  fi
+  sleep 1
+done
+pass "fetcher picked up the S3-pushed cds/lds config"
+
+# Tolerant by design, unlike the http-mode phase's zero-tolerance stats
+# check above: this container boots from an image whose baked-in cds.yaml/
+# lds.yaml (the phase-1 multi-backend set) is intentionally different from
+# what's pushed to S3, so the fetcher's first poll is a real transition,
+# not a fresh boot into already-correct config. A transient
+# cds.update_rejected/lds.update_rejected blip during that one-time
+# transition is a known, separately-tracked issue (see CLAUDE.md), not
+# something this test should fail on - it's eventually consistent within
+# one poll interval. What this test actually needs to prove is the S3 code
+# path itself works: the fetcher can pull from S3 and Envoy ends up
+# correctly serving the pushed config, which the eventual dynamic_listeners
+# check and the functional request below both confirm.
+echo "--- Waiting for the S3-fetched listener to be free of errors (eventually consistent) ---"
+for i in $(seq 1 15); do
+  if ! curl -s "http://localhost:$S3_ADMIN_PORT/config_dump?resource=dynamic_listeners" | grep -q '"error_state"'; then
+    break
+  fi
+  if [ "$i" = 15 ]; then
+    curl -s "http://localhost:$S3_ADMIN_PORT/config_dump?resource=dynamic_listeners"
+    fail "listener still in error_state after waiting - not just a transient transition blip (see dump above)"
+  fi
+  sleep 1
+done
+pass "S3-fetched listener has no active error_state"
+
+warm_up "http://localhost:$S3_HTTP_PORT/s3test/get"
+code="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$S3_HTTP_PORT/s3test/get")"
+[ "$code" = "200" ] || fail "S3-fetched route: got $code, want 200"
+pass "S3-fetched route serves 200"
 
 echo
 echo "All integration checks passed."

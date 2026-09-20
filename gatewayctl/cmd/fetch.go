@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/spf13/cobra"
 )
@@ -99,11 +98,10 @@ func fetchHTTPFile(serverURL, apiToken, filename string) ([]byte, bool, error) {
 
 func fetchS3File(bucket, prefix, filename string) ([]byte, bool, error) {
 	ctx := context.Background()
-	cfg, err := awsconfig.LoadDefaultConfig(ctx)
+	client, err := newS3Client(ctx)
 	if err != nil {
-		return nil, false, fmt.Errorf("loading AWS config: %w", err)
+		return nil, false, err
 	}
-	client := s3.NewFromConfig(cfg)
 	key := strings.TrimLeft(prefix, "/") + filename
 
 	out, err := client.GetObject(ctx, &s3.GetObjectInput{Bucket: &bucket, Key: &key})
