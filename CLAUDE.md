@@ -161,6 +161,28 @@ previous one. See `docs/architecture.md` for the full writeup - read it
 before touching `fetcher`'s `expandRuntimeLayer` or the `disk_layer`
 config in `config/envoy.yaml`.
 
+**Readiness is served by the fetcher, not Envoy**: Envoy's own `/ready`
+goes live using whatever's baked into the image immediately at boot -
+`dynamic_resources` are file-based, so there's always something local to
+read - which is usually near-empty, since `rendered/` is gitignored and
+real backend/fault state lives in the config server/S3, not the image.
+Without a separate gate, a pod can be marked Ready by Kubernetes (and
+start receiving traffic during a rolling deploy/scale-up) well before the
+fetcher has ever synced the real config source, silently falling through
+to `default_app` for anything it hasn't caught up on yet - a real,
+observed gap, not hypothetical. The fetcher instead serves its own
+`GET :8081/ready` (see `fetcher/main.go`; the Helm chart's
+`readinessProbe` targets this port, not the admin one), which only
+reports ready after the first full poll pass completes without a
+fetch/write error (a legitimate "nothing pushed yet" counts as clean) and
+never flips back - a pod that already converged once should stay in
+rotation through a later transient poll failure, not drop out while still
+serving good config. This is a deliberate fail-closed choice: a pod that
+can't reach its config source at all stays NotReady indefinitely rather
+than silently serving stale/seed config. It does **not** solve mixed
+distribution-mode rollouts (e.g. v1 on `http`, v2 on `s3` mid-deploy) -
+see the "Distribution modes" section below.
+
 **gatewayctl internals** (`gatewayctl/internal/`):
 - `config` - loads/saves `values.yaml` (`Backends` list, `Faults` map
   keyed by target name).

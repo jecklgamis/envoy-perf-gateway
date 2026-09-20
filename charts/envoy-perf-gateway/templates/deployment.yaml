@@ -48,6 +48,9 @@ spec:
             - name: admin
               containerPort: {{ .Values.service.adminPort }}
               protocol: TCP
+            - name: fetcher-ready
+              containerPort: 8081
+              protocol: TCP
           env:
             - name: CONFIG_SOURCE_KIND
               value: {{ .Values.configSourceKind | quote }}
@@ -90,10 +93,19 @@ spec:
             httpGet:
               path: /ready
               port: admin
+          # Deliberately served by the fetcher (see fetcher/main.go), not
+          # Envoy: Envoy's own /ready goes live using the image's baked-in
+          # seed config immediately at boot - which is usually near-empty,
+          # since rendered/ is gitignored and real backend/fault state
+          # lives in the config server/S3, not the image - well before the
+          # fetcher has ever synced the real source. This keeps a pod out
+          # of rotation until it's actually serving current config, instead
+          # of silently falling through to default_app for whatever
+          # backends/faults it hasn't caught up on yet.
           readinessProbe:
             httpGet:
               path: /ready
-              port: admin
+              port: fetcher-ready
           {{- with .Values.resources }}
           resources:
             {{- toYaml . | nindent 12 }}

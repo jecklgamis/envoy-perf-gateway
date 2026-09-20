@@ -47,3 +47,9 @@ See `values.yaml` for the full list. Notable ones:
   convenience, but a direct `POST /runtime_modify` against it only
   affects one pod and doesn't survive a restart - use `gatewayctl fault`
   for anything that should apply across `replicaCount` replicas.
+- The pod's `readinessProbe` targets the fetcher's own `:8081/ready`, not
+  Envoy's admin API - it only reports ready after the fetcher's first
+  successful sync of the real config source, so a pod isn't marked Ready
+  and handed traffic while still serving the image's baked-in seed config
+  (which is usually empty - `rendered/` is gitignored). Not exposed on the
+  Service; it's a pod-internal probe target only.

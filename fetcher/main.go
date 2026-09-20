@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -28,8 +29,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// fetch returns (content, found, err). found=false, err=nil means the
+// source has no content for filename yet (nothing pushed there ever) -
+// distinct from a real error, so the poll loop can treat "nothing to sync
+// yet" as a clean, convergence-counting outcome rather than a failure to
+// retry.
 type source interface {
-	fetch(filename string) ([]byte, error)
+	fetch(filename string) (content []byte, found bool, err error)
 }
 
 type httpSource struct {
@@ -38,24 +44,28 @@ type httpSource struct {
 	client  *http.Client
 }
 
-func (s *httpSource) fetch(filename string) ([]byte, error) {
+func (s *httpSource) fetch(filename string) ([]byte, bool, error) {
 	req, err := http.NewRequest(http.MethodGet, s.baseURL+"/config/"+filename, nil)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if s.token != "" {
 		req.Header.Set("Authorization", "Bearer "+s.token)
 	}
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, false, nil
+	}
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("%s: %s", resp.Status, strings.TrimSpace(string(body)))
+		return nil, false, fmt.Errorf("%s: %s", resp.Status, strings.TrimSpace(string(body)))
 	}
-	return io.ReadAll(resp.Body)
+	content, err := io.ReadAll(resp.Body)
+	return content, true, err
 }
 
 type s3Source struct {
@@ -64,17 +74,21 @@ type s3Source struct {
 	client *s3.Client
 }
 
-func (s *s3Source) fetch(filename string) ([]byte, error) {
+func (s *s3Source) fetch(filename string) ([]byte, bool, error) {
 	key := s.prefix + filename
 	out, err := s.client.GetObject(context.Background(), &s3.GetObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(key),
 	})
 	if err != nil {
-		return nil, err
+		if strings.Contains(err.Error(), "NoSuchKey") {
+			return nil, false, nil
+		}
+		return nil, false, err
 	}
 	defer out.Body.Close()
-	return io.ReadAll(out.Body)
+	content, err := io.ReadAll(out.Body)
+	return content, true, err
 }
 
 func buildSource(kind string) (source, error) {
@@ -231,14 +245,56 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// Serves the container's readinessProbe (see
+	// charts/envoy-perf-gateway/templates/deployment.yaml) - deliberately
+	// the fetcher, not Envoy, since Envoy's own /ready goes live using
+	// whatever's baked into the image immediately at boot (its
+	// dynamic_resources are file-based, so there's always something local
+	// to read), well before this process has ever synced the real config
+	// source. A single consistent target for the probe - one HTTP call to
+	// the thing that actually knows whether a real sync has happened - is
+	// simpler than a probe that has to check Envoy and the fetcher
+	// separately. synced flips true after the first full poll pass that
+	// completes without any fetch/write error (a legitimate "nothing
+	// pushed yet" counts as clean) and never flips back - a pod that has
+	// already converged once shouldn't drop out of rotation just because a
+	// later poll hits a transient error while still serving good config.
+	var synced atomic.Bool
+	readyPort := envOr("FETCHER_READY_PORT", "8081")
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/ready", func(w http.ResponseWriter, r *http.Request) {
+			if synced.Load() {
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte("synced\n"))
+				return
+			}
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte("not yet synced\n"))
+		})
+		log.Fatal(http.ListenAndServe(":"+readyPort, mux))
+	}()
+
 	logMsg("INFO", "Polling %s every %ss for %v -> %s", sourceKind, pollIntervalStr, files, targetDir)
+	logMsg("INFO", "Serving readiness on :%s/ready", readyPort)
 
 	lastHash := map[string]string{}
 	for {
+		cleanPass := true
 		for i, filename := range files {
-			content, err := src.fetch(filename)
+			content, found, err := src.fetch(filename)
 			if err != nil {
 				logMsg("WARNING", "Fetch failed for %s: %v", filename, err)
+				cleanPass = false
+				continue
+			}
+			if !found {
+				// Nothing pushed there yet - not an error, and whatever's
+				// already on disk (the image's baked-in seed, or a prior
+				// poll's write) stands as-is. Still counts as a clean pass
+				// for readiness purposes: this pod correctly reflects "no
+				// config pushed", it just isn't stale/racing.
+				logMsg("INFO", "%s: nothing pushed yet, leaving current state as-is", filename)
 				continue
 			}
 			sum := sha256.Sum256(content)
@@ -263,6 +319,7 @@ func main() {
 			}
 			if writeErr != nil {
 				logMsg("WARNING", "Failed to apply %s: %v", filename, writeErr)
+				cleanPass = false
 				continue
 			}
 			lastHash[filename] = digest
@@ -282,6 +339,11 @@ func main() {
 				time.Sleep(300 * time.Millisecond)
 			}
 		}
+
+		if cleanPass && synced.CompareAndSwap(false, true) {
+			logMsg("INFO", "First full sync complete - readiness on :%s/ready now reports synced", readyPort)
+		}
+
 		time.Sleep(time.Duration(pollInterval * float64(time.Second)))
 	}
 }
