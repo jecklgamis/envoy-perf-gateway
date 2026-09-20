@@ -11,7 +11,7 @@ helm install my-config-server . --set apiToken=default
 ```
 
 Then point a gateway at it - either the `envoy-perf-gateway` chart's
-`gateway.configSourceUrl`, or `gatewayctl config set http.server-url`
+`configSourceUrl`, or `gatewayctl config set http.server-url`
 directly - using its Service address,
 `http://<release-name>.<namespace>.svc.cluster.local:<service.port>`.
 

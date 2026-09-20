@@ -719,7 +719,7 @@ docker start envoy-perf-gateway</code></pre>
       <h3>A fault change doesn't seem to apply</h3>
       <p>Allow up to <code>CONFIG_POLL_INTERVAL_SECONDS</code> (15s by default) for the fetcher's next poll. Check the running gateway's fault state directly against its admin API: <code>curl http://&lt;admin-host&gt;:9901/runtime</code> — the <code>entries</code> field shows exactly what Envoy currently sees.</p>
 
-      <h3>Scaling <code>gateway.replicaCount</code> and fault injection</h3>
+      <h3>Scaling <code>replicaCount</code> and fault injection</h3>
       <p><code>add-backend</code>/<code>remove-backend</code> scale fine — every replica's fetcher independently converges on the same config. <code>gatewayctl fault</code> also scales correctly as of the current design (it distributes through the same pipeline). A direct admin-API <code>POST /runtime_modify</code>, however, only ever reaches one pod — don't rely on it for anything that needs to apply cluster-wide.</p>
     </section>
 
