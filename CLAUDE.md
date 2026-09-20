@@ -52,6 +52,23 @@ Coverage is high on the pure logic (`internal/render` ~92%, `internal/envoyconfi
 doing file/network I/O - those are covered by manual integration testing
 against a real config_server instead of mocks).
 
+**Integration test** (`make integration-test`, or `./scripts/integration-test.sh`
+directly, also runs in CI on every PR/push touching the gateway):
+renders a `values.yaml` covering every `add-backend` feature (TLS, HTTP/2,
+host-rewrite, domain/path-prefix routing, gzip compression), bakes it into
+a real image, boots it, and checks `cds`/`lds` `update_rejected`/
+`update_failure` are `0` via the admin API - unit tests can't catch a
+config that compiles and marshals fine but Envoy still rejects at
+listener-load time (see the compressor gotcha above; this script exists
+specifically because that bug shipped without one). Also does functional
+checks (gzip applies/doesn't leak, routes isolated). **If you edit this
+script**: it must never let `add-backend`/`remove-backend` resolve a real
+`~/.config/gatewayctl/config.yaml` - it sets `GATEWAYCTL_CONFIG` to a
+fresh temp path for exactly this reason, after an earlier version of this
+script auto-pushed its test backends to this project's own live
+production deployment on the first run. Don't remove that without
+understanding why it's there.
+
 **Run from source, HTTP distribution mode** (two terminals - both run in
 the foreground):
 ```bash

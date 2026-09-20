@@ -1,0 +1,40 @@
+name: Integration Test
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'app/**'
+      - 'config/**'
+      - 'gatewayctl/**'
+      - 'fetcher/**'
+      - 'run-app.sh'
+      - 'run-envoy.sh'
+      - 'supervisor.ini'
+      - 'Dockerfile'
+      - 'scripts/integration-test.sh'
+      - '.github/workflows/integration-test.yaml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'app/**'
+      - 'config/**'
+      - 'gatewayctl/**'
+      - 'fetcher/**'
+      - 'run-app.sh'
+      - 'run-envoy.sh'
+      - 'supervisor.ini'
+      - 'Dockerfile'
+      - 'scripts/integration-test.sh'
+      - '.github/workflows/integration-test.yaml'
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v7
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - name: Boot the gateway and verify Envoy accepts the rendered config
+        run: ./scripts/integration-test.sh

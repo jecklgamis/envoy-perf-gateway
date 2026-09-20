@@ -47,5 +47,14 @@ build-gatewayctl:
 # needed on their end.
 build-gatewayctl-all:
 	$(MAKE) -C gatewayctl build-all
+# Builds the gateway image with a values.yaml covering every add-backend
+# feature (TLS, HTTP/2, host-rewrite, domain/path-prefix routing, gzip
+# compression), boots it, and checks Envoy actually accepted the config
+# (not just that it compiled and marshaled) plus that the features behave
+# as configured. Run this after any change to
+# gatewayctl/internal/{render,envoyconfig}, config/envoy.yaml, or the
+# Dockerfile. See scripts/integration-test.sh for why this exists.
+integration-test:
+	./scripts/integration-test.sh
 all: image
 up: all run
