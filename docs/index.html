@@ -126,7 +126,13 @@
   .sidebar .tagline {
     color: var(--text-muted);
     font-size: 0.82rem;
+    margin-bottom: 4px;
+  }
+  .sidebar .tagline:last-of-type {
     margin-bottom: 22px;
+  }
+  .sidebar .tagline a {
+    color: var(--text-muted);
   }
   .sidebar nav h3 {
     font-size: 0.72rem;
@@ -321,6 +327,7 @@
   <aside class="sidebar" id="sidebar">
     <div class="brand"><span class="dot"></span> envoy-perf-gateway</div>
     <div class="tagline">User Guide</div>
+    <div class="tagline"><a href="https://github.com/jecklgamis/envoy-perf-gateway">View on GitHub &rarr;</a></div>
     <button class="mobile-toggle" id="navToggle" type="button">Menu ▾</button>
     <nav id="navList">
       <h3>Getting Started</h3>
