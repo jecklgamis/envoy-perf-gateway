@@ -1,65 +1,64 @@
 # Default values for envoy-perf-gateway.
 #
 # config_server is a separate chart (envoy-perf-gateway-config-server) -
-# install it independently and point gateway.configSourceUrl at it, or
-# point gatewayctl at it directly. See that chart's NOTES.txt for the
+# install it independently and point configSourceUrl at it, or point
+# gatewayctl at it directly. See that chart's NOTES.txt for the
 # in-cluster address to use.
 
-gateway:
-  image:
-    repository: jecklgamis/envoy-perf-gateway
-    tag: "main"
-    pullPolicy: IfNotPresent
+image:
+  repository: jecklgamis/envoy-perf-gateway
+  tag: "main"
+  pullPolicy: IfNotPresent
 
-  replicaCount: 1
+replicaCount: 1
 
-  service:
-    type: ClusterIP
-    httpPort: 8080
-    adminPort: 9901
+service:
+  type: ClusterIP
+  httpPort: 8080
+  adminPort: 9901
 
-  # -- "http" (talk to a config_server) or "s3" (poll an S3 bucket
-  # instead).
-  configSourceKind: http
+# -- "http" (talk to a config_server) or "s3" (poll an S3 bucket
+# instead).
+configSourceKind: http
 
-  # -- Base URL of a config_server instance - e.g. the Service address
-  # from installing the envoy-perf-gateway-config-server chart
-  # separately, such as http://my-config-server:8090. Required when
-  # configSourceKind=http.
-  configSourceUrl: ""
+# -- Base URL of a config_server instance - e.g. the Service address
+# from installing the envoy-perf-gateway-config-server chart
+# separately, such as http://my-config-server:8090. Required when
+# configSourceKind=http.
+configSourceUrl: ""
 
-  # -- Bearer token sent to the config server. Must match that
-  # deployment's apiToken. Prefer configApiTokenExistingSecret in
-  # anything beyond local/dev use.
-  configApiToken: ""
-  # -- Existing Secret {name, key} to source the token from instead of
-  # configApiToken.
-  configApiTokenExistingSecret: {}
-  # name: ""
-  # key: ""
+# -- Bearer token sent to the config server. Must match that
+# deployment's apiToken. Prefer configApiTokenExistingSecret in
+# anything beyond local/dev use.
+configApiToken: ""
+# -- Existing Secret {name, key} to source the token from instead of
+# configApiToken.
+configApiTokenExistingSecret: {}
+# name: ""
+# key: ""
 
-  s3:
-    bucket: ""
-    prefix: "envoy-perf-gateway/"
-    region: ""
-    # -- Existing Secret providing AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY,
-    # e.g. for clusters without IRSA/workload identity.
-    existingSecret: ""
+s3:
+  bucket: ""
+  prefix: "envoy-perf-gateway/"
+  region: ""
+  # -- Existing Secret providing AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY,
+  # e.g. for clusters without IRSA/workload identity.
+  existingSecret: ""
 
-  resources: {}
-  # limits:
-  #   cpu: 500m
-  #   memory: 256Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
+resources: {}
+# limits:
+#   cpu: 500m
+#   memory: 256Mi
+# requests:
+#   cpu: 100m
+#   memory: 128Mi
 
-  nodeSelector: {}
-  tolerations: []
-  affinity: {}
-  podAnnotations: {}
-  podSecurityContext: {}
-  securityContext: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}
+podSecurityContext: {}
+securityContext: {}
 
 ingress:
   enabled: false

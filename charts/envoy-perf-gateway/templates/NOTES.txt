@@ -1,33 +1,33 @@
 envoy-perf-gateway has been deployed.
 
 Gateway Service: {{ include "envoy-perf-gateway.fullname" . }}
-  http:  port {{ .Values.gateway.service.httpPort }}
-  admin: port {{ .Values.gateway.service.adminPort }}
+  http:  port {{ .Values.service.httpPort }}
+  admin: port {{ .Values.service.adminPort }}
 
 1. Reach the gateway's HTTP port:
 
-   kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "envoy-perf-gateway.fullname" . }} 8080:{{ .Values.gateway.service.httpPort }}
+   kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "envoy-perf-gateway.fullname" . }} 8080:{{ .Values.service.httpPort }}
    curl http://localhost:8080/
 
-{{- if eq .Values.gateway.configSourceKind "http" }}
+{{- if eq .Values.configSourceKind "http" }}
 
-2. This gateway is configured for gateway.configSourceKind=http, pointed
-   at {{ .Values.gateway.configSourceUrl }}. If that's the
+2. This gateway is configured for configSourceKind=http, pointed
+   at {{ .Values.configSourceUrl }}. If that's the
    envoy-perf-gateway-config-server chart, it must be installed
    separately (this chart doesn't bundle it) - see that chart's own
    NOTES.txt for its address and how to reach it with gatewayctl.
 {{- else }}
 
-2. This gateway is configured for gateway.configSourceKind=s3, bucket
-   {{ .Values.gateway.s3.bucket }}. Point gatewayctl at the same bucket
-   (gatewayctl config set mode s3; s3.bucket {{ .Values.gateway.s3.bucket }})
+2. This gateway is configured for configSourceKind=s3, bucket
+   {{ .Values.s3.bucket }}. Point gatewayctl at the same bucket
+   (gatewayctl config set mode s3; s3.bucket {{ .Values.s3.bucket }})
    to push backends and fault injection.
 {{- end }}
 
 3. gatewayctl fault abort/delay/reset distribute through the same
    pipeline as backends (values.yaml -> config server/S3 -> every
    replica's fetcher), so they apply consistently across
-   gateway.replicaCount replicas and survive pod restarts. Expect the
+   replicaCount replicas and survive pod restarts. Expect the
    change to take effect on the fetcher's next poll
    (CONFIG_POLL_INTERVAL_SECONDS, 15s by default), not instantly.
 
@@ -35,5 +35,5 @@ Gateway Service: {{ include "envoy-perf-gateway.fullname" . }}
    that pod's next restart), hit its admin API directly - not exposed as
    a Service by this chart, so port-forward the pod itself:
 
-   kubectl port-forward -n {{ .Release.Namespace }} <gateway-pod-name> 9901:{{ .Values.gateway.service.adminPort }}
+   kubectl port-forward -n {{ .Release.Namespace }} <gateway-pod-name> 9901:{{ .Values.service.adminPort }}
    curl -X POST "http://localhost:9901/runtime_modify?fault.http.abort.abort_percent.httpbin=100&fault.http.abort.http_status.httpbin=503"

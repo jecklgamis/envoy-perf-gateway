@@ -1,13 +1,13 @@
-{{- if eq .Values.gateway.configSourceKind "http" }}
-{{- if not .Values.gateway.configSourceUrl }}
-{{- fail "gateway.configSourceUrl is required when gateway.configSourceKind=http - install the envoy-perf-gateway-config-server chart (or point at an existing one) and set this to its address" }}
+{{- if eq .Values.configSourceKind "http" }}
+{{- if not .Values.configSourceUrl }}
+{{- fail "configSourceUrl is required when configSourceKind=http - install the envoy-perf-gateway-config-server chart (or point at an existing one) and set this to its address" }}
 {{- end }}
-{{- else if eq .Values.gateway.configSourceKind "s3" }}
-{{- if not .Values.gateway.s3.bucket }}
-{{- fail "gateway.s3.bucket is required when gateway.configSourceKind=s3" }}
+{{- else if eq .Values.configSourceKind "s3" }}
+{{- if not .Values.s3.bucket }}
+{{- fail "s3.bucket is required when configSourceKind=s3" }}
 {{- end }}
 {{- else }}
-{{- fail (printf "unsupported gateway.configSourceKind: %s (want \"http\" or \"s3\")" .Values.gateway.configSourceKind) }}
+{{- fail (printf "unsupported configSourceKind: %s (want \"http\" or \"s3\")" .Values.configSourceKind) }}
 {{- end }}
 apiVersion: apps/v1
 kind: Deployment
@@ -16,7 +16,7 @@ metadata:
   labels:
     {{- include "envoy-perf-gateway.labels" . | nindent 4 }}
 spec:
-  replicas: {{ .Values.gateway.replicaCount }}
+  replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
       {{- include "envoy-perf-gateway.selectorLabels" . | nindent 6 }}
@@ -24,65 +24,65 @@ spec:
     metadata:
       labels:
         {{- include "envoy-perf-gateway.labels" . | nindent 8 }}
-      {{- with .Values.gateway.podAnnotations }}
+      {{- with .Values.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
-      {{- with .Values.gateway.podSecurityContext }}
+      {{- with .Values.podSecurityContext }}
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
         - name: gateway
-          image: "{{ .Values.gateway.image.repository }}:{{ .Values.gateway.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.gateway.image.pullPolicy }}
-          {{- with .Values.gateway.securityContext }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.securityContext }}
           securityContext:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           ports:
             - name: http
-              containerPort: {{ .Values.gateway.service.httpPort }}
+              containerPort: {{ .Values.service.httpPort }}
               protocol: TCP
             - name: admin
-              containerPort: {{ .Values.gateway.service.adminPort }}
+              containerPort: {{ .Values.service.adminPort }}
               protocol: TCP
           env:
             - name: CONFIG_SOURCE_KIND
-              value: {{ .Values.gateway.configSourceKind | quote }}
-            {{- if eq .Values.gateway.configSourceKind "http" }}
+              value: {{ .Values.configSourceKind | quote }}
+            {{- if eq .Values.configSourceKind "http" }}
             - name: CONFIG_SOURCE_URL
-              value: {{ .Values.gateway.configSourceUrl | quote }}
+              value: {{ .Values.configSourceUrl | quote }}
             - name: CONFIG_API_TOKEN
               valueFrom:
                 secretKeyRef:
-                  {{- if .Values.gateway.configApiTokenExistingSecret.name }}
-                  name: {{ .Values.gateway.configApiTokenExistingSecret.name }}
-                  key: {{ .Values.gateway.configApiTokenExistingSecret.key }}
+                  {{- if .Values.configApiTokenExistingSecret.name }}
+                  name: {{ .Values.configApiTokenExistingSecret.name }}
+                  key: {{ .Values.configApiTokenExistingSecret.key }}
                   {{- else }}
                   name: {{ include "envoy-perf-gateway.fullname" . }}
                   key: config-api-token
                   {{- end }}
             {{- else }}
             - name: CONFIG_S3_BUCKET
-              value: {{ .Values.gateway.s3.bucket | quote }}
+              value: {{ .Values.s3.bucket | quote }}
             - name: CONFIG_S3_PREFIX
-              value: {{ .Values.gateway.s3.prefix | quote }}
-            {{- if .Values.gateway.s3.region }}
+              value: {{ .Values.s3.prefix | quote }}
+            {{- if .Values.s3.region }}
             - name: AWS_REGION
-              value: {{ .Values.gateway.s3.region | quote }}
+              value: {{ .Values.s3.region | quote }}
             {{- end }}
-            {{- if .Values.gateway.s3.existingSecret }}
+            {{- if .Values.s3.existingSecret }}
             - name: AWS_ACCESS_KEY_ID
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.gateway.s3.existingSecret }}
+                  name: {{ .Values.s3.existingSecret }}
                   key: AWS_ACCESS_KEY_ID
             - name: AWS_SECRET_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ .Values.gateway.s3.existingSecret }}
+                  name: {{ .Values.s3.existingSecret }}
                   key: AWS_SECRET_ACCESS_KEY
             {{- end }}
             {{- end }}
@@ -94,19 +94,19 @@ spec:
             httpGet:
               path: /ready
               port: admin
-          {{- with .Values.gateway.resources }}
+          {{- with .Values.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-      {{- with .Values.gateway.nodeSelector }}
+      {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.gateway.affinity }}
+      {{- with .Values.affinity }}
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.gateway.tolerations }}
+      {{- with .Values.tolerations }}
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}

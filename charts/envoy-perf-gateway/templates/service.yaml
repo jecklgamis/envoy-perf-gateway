@@ -5,14 +5,14 @@ metadata:
   labels:
     {{- include "envoy-perf-gateway.labels" . | nindent 4 }}
 spec:
-  type: {{ .Values.gateway.service.type }}
+  type: {{ .Values.service.type }}
   ports:
     - name: http
-      port: {{ .Values.gateway.service.httpPort }}
+      port: {{ .Values.service.httpPort }}
       targetPort: http
       protocol: TCP
     - name: admin
-      port: {{ .Values.gateway.service.adminPort }}
+      port: {{ .Values.service.adminPort }}
       targetPort: admin
       protocol: TCP
   selector:

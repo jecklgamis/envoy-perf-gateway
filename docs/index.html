@@ -670,24 +670,24 @@ helm install my-config-server . --set apiToken=default</code></pre>
       <h3>2. Install the gateway, pointed at it</h3>
 <pre><code>cd charts/envoy-perf-gateway
 helm install my-gateway . \
-  --set gateway.configApiToken=default \
-  --set gateway.configSourceUrl=http://my-config-server:8090</code></pre>
+  --set configApiToken=default \
+  --set configSourceUrl=http://my-config-server:8090</code></pre>
       <p>Or with S3 mode, skipping the config server chart entirely:</p>
 <pre><code>helm install my-gateway . \
-  --set gateway.configSourceKind=s3 \
-  --set gateway.s3.bucket=my-bucket</code></pre>
+  --set configSourceKind=s3 \
+  --set s3.bucket=my-bucket</code></pre>
 
       <table>
         <tr><th>Key</th><th>Description</th></tr>
-        <tr><td><code>gateway.configSourceKind</code></td><td><code>http</code> or <code>s3</code></td></tr>
-        <tr><td><code>gateway.replicaCount</code></td><td>Gateway pod count. Fault injection and backends both converge across all replicas via the config pipeline.</td></tr>
-        <tr><td><code>gateway.configSourceUrl</code></td><td>Required in <code>http</code> mode — the config server's address.</td></tr>
-        <tr><td><code>gateway.configApiToken</code></td><td>Required in <code>http</code> mode; must match the config server's token. Prefer <code>configApiTokenExistingSecret</code> beyond local/dev use.</td></tr>
-        <tr><td><code>gateway.s3.bucket</code></td><td>Required in <code>s3</code> mode.</td></tr>
+        <tr><td><code>configSourceKind</code></td><td><code>http</code> or <code>s3</code></td></tr>
+        <tr><td><code>replicaCount</code></td><td>Gateway pod count. Fault injection and backends both converge across all replicas via the config pipeline.</td></tr>
+        <tr><td><code>configSourceUrl</code></td><td>Required in <code>http</code> mode — the config server's address.</td></tr>
+        <tr><td><code>configApiToken</code></td><td>Required in <code>http</code> mode; must match the config server's token. Prefer <code>configApiTokenExistingSecret</code> beyond local/dev use.</td></tr>
+        <tr><td><code>s3.bucket</code></td><td>Required in <code>s3</code> mode.</td></tr>
         <tr><td><code>ingress.enabled</code></td><td>Off by default. Both charts ship an nginx + cert-manager Ingress template, disabled unless you opt in.</td></tr>
       </table>
 
-      <div class="warn">The gateway's admin port (<code>:9901</code>) is exposed on its Service for convenience, but a direct <code>POST /runtime_modify</code> against it only affects one pod and doesn't survive a restart — use <code>gatewayctl fault</code> for anything that should apply across <code>gateway.replicaCount</code> replicas.</div>
+      <div class="warn">The gateway's admin port (<code>:9901</code>) is exposed on its Service for convenience, but a direct <code>POST /runtime_modify</code> against it only affects one pod and doesn't survive a restart — use <code>gatewayctl fault</code> for anything that should apply across <code>replicaCount</code> replicas.</div>
     </section>
 
     <section id="architecture">
