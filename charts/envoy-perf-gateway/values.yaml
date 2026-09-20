@@ -7,8 +7,13 @@
 
 image:
   repository: jecklgamis/envoy-perf-gateway
+  # tag defaults to a mutable branch tag ("main"), not a fixed version - so
+  # pullPolicy must be Always, or a node that already cached an older
+  # "main" image won't re-pull the newer one a fresh CI build just pushed
+  # under the same tag, and a rollout/upgrade silently keeps running stale
+  # code with no error anywhere.
   tag: "main"
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
 
 replicaCount: 1
 
