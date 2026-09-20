@@ -532,6 +532,20 @@ curl -H "Host: frontend-b.test.local" http://localhost:8080/api/anything</code><
   --route-prefix /serverprobes/ --host-header www.serverprobes.com</code></pre>
       <div class="note"><code>--host</code> (and TLS SNI) control where and how Envoy connects to the upstream; <code>--host-header</code> controls what the upstream actually sees in the request itself. Without it, the upstream receives the gateway's own inbound <code>Host</code> header unchanged - fine for a backend like <code>httpbin.org</code> that doesn't validate it, but rejected outright (<code>421 Misdirected Request</code>) by anything that does.</div>
 
+      <h3>HTTP/2 Upstreams (gRPC)</h3>
+      <p><code>--http2</code> makes Envoy speak HTTP/2 to a backend's upstream connection. Without it, Envoy defaults every cluster to HTTP/1.1 upstream regardless of what the listener or client negotiated - gRPC needs HTTP/2 end to end, so a gRPC backend needs this flag to work at all:</p>
+<pre><code>gatewayctl add-backend --name grpc-svc --host grpc.internal --port 50051 --tls --http2 \
+  --domain grpc.test.local</code></pre>
+      <div class="note">Use <code>--domain</code>, not <code>--route-prefix</code>, for a gRPC backend - path rewriting breaks gRPC's fixed <code>/package.Service/Method</code> paths. If <code>--tls</code> is also set, ALPN advertises <code>h2</code> during the handshake. If this gateway is deployed behind an Ingress (the Helm charts), that hop also needs its own HTTP/2 or gRPC <code>backend-protocol</code> annotation - <code>--http2</code> only covers gatewayctl's own upstream connection, not the Ingress-to-pod hop in front of it.</div>
+
+      <h3>Response Compression</h3>
+      <p><code>--compression gzip</code> turns on gzip response compression for one backend's route. It's off by default and opt-in per backend, not gateway-wide - this is a perf-testing tool, and compression changes latency/CPU characteristics that would otherwise silently affect a load test nobody asked to have compressed:</p>
+<pre><code>gatewayctl add-backend --name api --host api.internal --port 8080 --route-prefix /api/ --compression gzip
+
+curl -H "Accept-Encoding: gzip" http://localhost:8080/api/... <span class="cmt"># content-encoding: gzip</span>
+curl http://localhost:8080/                                   <span class="cmt"># unaffected - compression wasn't requested for this route</span></code></pre>
+      <p>Compression only applies to responses whose <code>Content-Type</code> is text/JSON-ish (<code>application/json</code>, <code>text/html</code>, <code>text/css</code>, etc.) and above a minimum size - compressing tiny or already-binary/compressed payloads (images, video) just wastes CPU. It also still respects the client's own <code>Accept-Encoding</code> header; a client that doesn't advertise gzip support never gets a compressed response regardless of this flag.</p>
+
       <h3>Path Prefix vs. Virtual Host: which to use</h3>
       <p>The right choice isn't really "API vs. frontend" - it's whether the backend assumes it owns the whole path space at its own origin.</p>
       <p><strong>Use <code>--route-prefix</code></strong> for backends whose responses are self-contained - a JSON API is the classic case. Nothing in the response implies a follow-up request to some other absolute path on the same origin, so proxying it under a prefix (<code>/httpbin/get</code> &rarr; <code>httpbin.org/get</code>) works cleanly.</p>

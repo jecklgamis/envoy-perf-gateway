@@ -56,11 +56,25 @@ func BuildCDS(v config.Values) ec.CDS {
 			LoadAssignment:  singleEndpointLoadAssignment(b.Name, b.Host, b.Port),
 		}
 		if b.TLS {
+			tlsContext := ec.UpstreamTLSContext{
+				Type: ec.TypeUpstreamTLS,
+				SNI:  b.Host,
+			}
+			if b.HTTP2 {
+				tlsContext.AlpnProtocols = []string{"h2"}
+			}
 			c.TransportSocket = &ec.TransportSocket{
-				Name: "envoy.transport_sockets.tls",
-				TypedConfig: ec.UpstreamTLSContext{
-					Type: ec.TypeUpstreamTLS,
-					SNI:  b.Host,
+				Name:        "envoy.transport_sockets.tls",
+				TypedConfig: tlsContext,
+			}
+		}
+		if b.HTTP2 {
+			c.TypedExtensionProtocolOptions = map[string]any{
+				"envoy.extensions.upstreams.http.v3.HttpProtocolOptions": ec.HTTPProtocolOptions{
+					Type: ec.TypeHTTPProtocolOptions,
+					ExplicitHTTPConfig: ec.ExplicitHTTPConfig{
+						HTTP2ProtocolOptions: map[string]any{},
+					},
 				},
 			}
 		}
@@ -68,6 +82,20 @@ func BuildCDS(v config.Values) ec.CDS {
 	}
 
 	return ec.CDS{Resources: clusters}
+}
+
+// perRouteFilterConfig builds a route's typed_per_filter_config: always
+// fault (so every route is independently toggleable), plus a compressor
+// override when the backend asked for --compression, since compression
+// defaults to off at the listener level.
+func perRouteFilterConfig(target, compression string) map[string]any {
+	cfg := ec.FaultPerRoute(target)
+	if compression != "" {
+		for k, v := range ec.CompressorPerRoute() {
+			cfg[k] = v
+		}
+	}
+	return cfg
 }
 
 // BuildLDS returns a single http_listener. Backends with --domain get their
@@ -93,14 +121,14 @@ func BuildLDS(v config.Values) ec.LDS {
 				Name:    b.Name,
 				Domains: []string{b.Domain},
 				Routes: []ec.Route{
-					{Match: ec.RouteMatch{Prefix: prefix}, Route: action, TypedPerFilterConfig: ec.FaultPerRoute(b.Name)},
+					{Match: ec.RouteMatch{Prefix: prefix}, Route: action, TypedPerFilterConfig: perRouteFilterConfig(b.Name, b.Compression)},
 				},
 			})
 		case b.RoutePrefix != "":
 			catchAllRoutes = append(catchAllRoutes, ec.Route{
 				Match:                ec.RouteMatch{Prefix: b.RoutePrefix},
 				Route:                ec.RouteAction{Cluster: b.Name, PrefixRewrite: "/", HostRewriteLiteral: b.HostRewrite, Timeout: b.Timeout},
-				TypedPerFilterConfig: ec.FaultPerRoute(b.Name),
+				TypedPerFilterConfig: perRouteFilterConfig(b.Name, b.Compression),
 			})
 		}
 	}
@@ -144,6 +172,7 @@ func BuildLDS(v config.Values) ec.LDS {
 								DelayPercentRuntime:    "fault.http.delay.delay_percent",
 								DelayDurationRuntime:   "fault.http.delay.fixed_duration_ms",
 							}},
+							{Name: "envoy.filters.http.compressor", TypedConfig: ec.Compressor()},
 							{Name: "envoy.filters.http.router", TypedConfig: ec.RouterTypedConfig{Type: ec.TypeRouter}},
 						},
 					},

@@ -18,6 +18,8 @@ var (
 	abDomain         string
 	abRoutePrefix    string
 	abHostRewrite    string
+	abHTTP2          bool
+	abCompression    string
 	abConnectTimeout string
 	abTimeout        string
 	abForce          bool
@@ -37,6 +39,9 @@ var addBackendCmd = &cobra.Command{
 			return err
 		}
 		if err := validateDuration("timeout", abTimeout); err != nil {
+			return err
+		}
+		if err := validateCompression("compression", abCompression); err != nil {
 			return err
 		}
 
@@ -77,6 +82,8 @@ var addBackendCmd = &cobra.Command{
 			Domain:         abDomain,
 			RoutePrefix:    abRoutePrefix,
 			HostRewrite:    abHostRewrite,
+			HTTP2:          abHTTP2,
+			Compression:    abCompression,
 			ConnectTimeout: abConnectTimeout,
 			Timeout:        abTimeout,
 		})
@@ -97,6 +104,12 @@ var addBackendCmd = &cobra.Command{
 		}
 		if abHostRewrite != "" {
 			routedVia = append(routedVia, "Host header "+abHostRewrite)
+		}
+		if abHTTP2 {
+			routedVia = append(routedVia, "HTTP/2 upstream")
+		}
+		if abCompression != "" {
+			routedVia = append(routedVia, abCompression+" compression")
 		}
 		msg := fmt.Sprintf("Added backend '%s' -> %s:%d", abName, abHost, abPort)
 		if len(routedVia) > 0 {
@@ -128,6 +141,21 @@ func init() {
 			"--host set instead controls the SNI at connect time, this controls what "+
 			"the upstream actually sees in the request itself. Omit to pass the "+
 			"gateway's own inbound Host header through unchanged.")
+	addBackendCmd.Flags().BoolVar(&abHTTP2, "http2", false,
+		"Speak HTTP/2 to this backend's upstream (required for gRPC). Envoy "+
+			"otherwise defaults every cluster to HTTP/1.1 upstream regardless of "+
+			"what the listener or client negotiated. Use --domain, not "+
+			"--route-prefix, for a gRPC backend - path rewriting breaks gRPC's "+
+			"fixed /package.Service/Method paths. If deployed behind an Ingress "+
+			"(the Helm charts), that hop also needs its own HTTP/2 or gRPC "+
+			"backend-protocol annotation - this flag only covers gatewayctl's "+
+			"own upstream connection.")
+	addBackendCmd.Flags().StringVar(&abCompression, "compression", "",
+		"Enable response compression for this backend's route. Only \"gzip\" is "+
+			"supported today. Off by default and opt-in per backend, not "+
+			"gateway-wide - compression changes latency/CPU characteristics that "+
+			"would otherwise silently affect a load test nobody asked to have "+
+			"compressed.")
 	addBackendCmd.Flags().StringVar(&abConnectTimeout, "connect-timeout", "5s", "")
 	addBackendCmd.Flags().StringVar(&abTimeout, "timeout", "15s", "")
 	addBackendCmd.Flags().BoolVar(&abForce, "force", false,

@@ -94,3 +94,16 @@ func TestValidateDuration(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateCompression(t *testing.T) {
+	for _, v := range []string{"", "gzip"} {
+		if err := validateCompression("compression", v); err != nil {
+			t.Errorf("validateCompression(%q) = %v, want nil", v, err)
+		}
+	}
+	for _, v := range []string{"brotli", "GZIP", "gzip ", "deflate"} {
+		if err := validateCompression("compression", v); err == nil {
+			t.Errorf("validateCompression(%q) = nil, want an error", v)
+		}
+	}
+}

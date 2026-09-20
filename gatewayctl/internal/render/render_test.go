@@ -89,6 +89,59 @@ func TestBuildCDSPlaintextHasNoTransportSocket(t *testing.T) {
 	}
 }
 
+func TestBuildCDSWithoutHTTP2HasNoProtocolOptions(t *testing.T) {
+	v := config.Values{Backends: []config.Backend{{Name: "svc", Host: "svc.internal", Port: 80, ConnectTimeout: "5s"}}}
+	c, _ := clusterByName(BuildCDS(v), "svc")
+	if c.TypedExtensionProtocolOptions != nil {
+		t.Errorf("expected no typed_extension_protocol_options without --http2, got %+v", c.TypedExtensionProtocolOptions)
+	}
+}
+
+func TestBuildCDSHTTP2SetsProtocolOptions(t *testing.T) {
+	v := config.Values{Backends: []config.Backend{
+		{Name: "grpc-svc", Host: "grpc.internal", Port: 50051, HTTP2: true, ConnectTimeout: "5s"},
+	}}
+	c, ok := clusterByName(BuildCDS(v), "grpc-svc")
+	if !ok {
+		t.Fatal("missing grpc-svc cluster")
+	}
+	entry, ok := c.TypedExtensionProtocolOptions["envoy.extensions.upstreams.http.v3.HttpProtocolOptions"]
+	if !ok {
+		t.Fatalf("missing HttpProtocolOptions entry: %+v", c.TypedExtensionProtocolOptions)
+	}
+	opts, ok := entry.(ec.HTTPProtocolOptions)
+	if !ok {
+		t.Fatalf("entry is %T, want ec.HTTPProtocolOptions", entry)
+	}
+	if opts.ExplicitHTTPConfig.HTTP2ProtocolOptions == nil {
+		t.Error("expected a non-nil (even if empty) http2_protocol_options map")
+	}
+}
+
+func TestBuildCDSHTTP2WithTLSSetsALPN(t *testing.T) {
+	v := config.Values{Backends: []config.Backend{
+		{Name: "grpc-svc", Host: "grpc.internal", Port: 50051, TLS: true, HTTP2: true, ConnectTimeout: "5s"},
+	}}
+	c, _ := clusterByName(BuildCDS(v), "grpc-svc")
+	if c.TransportSocket == nil {
+		t.Fatal("expected a transport_socket for a TLS+HTTP2 backend, got nil")
+	}
+	alpn := c.TransportSocket.TypedConfig.AlpnProtocols
+	if len(alpn) != 1 || alpn[0] != "h2" {
+		t.Errorf("got alpn_protocols=%v, want [\"h2\"]", alpn)
+	}
+}
+
+func TestBuildCDSTLSWithoutHTTP2HasNoALPN(t *testing.T) {
+	v := config.Values{Backends: []config.Backend{
+		{Name: "httpbin", Host: "httpbin.org", Port: 443, TLS: true, ConnectTimeout: "5s"},
+	}}
+	c, _ := clusterByName(BuildCDS(v), "httpbin")
+	if len(c.TransportSocket.TypedConfig.AlpnProtocols) != 0 {
+		t.Errorf("got alpn_protocols=%v for a plain TLS backend, want none", c.TransportSocket.TypedConfig.AlpnProtocols)
+	}
+}
+
 func TestBuildLDSRoutePrefixRewritesToSlash(t *testing.T) {
 	v := config.Values{Backends: []config.Backend{
 		{Name: "httpbin", RoutePrefix: "/httpbin/", Timeout: "15s"},
@@ -193,6 +246,66 @@ func TestBuildLDSEachRouteGetsIndependentFaultConfig(t *testing.T) {
 			t.Fatalf("runtime key %s reused across routes - faults would not be isolated", cfg.AbortPercentRuntime)
 		}
 		seen[cfg.AbortPercentRuntime] = true
+	}
+}
+
+func TestBuildLDSRegistersCompressorFilterDisabledByDefault(t *testing.T) {
+	lds := BuildLDS(config.Values{})
+	filters := lds.Resources[0].FilterChains[0].Filters[0].TypedConfig.HTTPFilters
+	for _, f := range filters {
+		if f.Name != "envoy.filters.http.compressor" {
+			continue
+		}
+		cfg, ok := f.TypedConfig.(ec.CompressorTypedConfig)
+		if !ok {
+			t.Fatalf("compressor filter typed_config is %T, want ec.CompressorTypedConfig", f.TypedConfig)
+		}
+		if cfg.ResponseDirectionConfig.CommonConfig.Enabled.DefaultValue {
+			t.Error("expected the listener-wide compressor filter to default to disabled")
+		}
+		return
+	}
+	t.Fatal("envoy.filters.http.compressor not found in http_filters - it must always be registered, even when no backend uses --compression, so a route can still enable it per-route")
+}
+
+func TestBuildLDSCompressionOffByDefaultForARoute(t *testing.T) {
+	v := config.Values{Backends: []config.Backend{{Name: "httpbin", RoutePrefix: "/httpbin/", Timeout: "15s"}}}
+	routes := catchAllRoutes(BuildLDS(v))
+	if _, ok := routes[0].TypedPerFilterConfig["envoy.filters.http.compressor"]; ok {
+		t.Error("a backend without --compression must not get a compressor override on its route")
+	}
+}
+
+func TestBuildLDSCompressionEnablesPerRouteOverride(t *testing.T) {
+	v := config.Values{Backends: []config.Backend{
+		{Name: "httpbin", RoutePrefix: "/httpbin/", Compression: "gzip", Timeout: "15s"},
+	}}
+	routes := catchAllRoutes(BuildLDS(v))
+	entry, ok := routes[0].TypedPerFilterConfig["envoy.filters.http.compressor"]
+	if !ok {
+		t.Fatal("expected a compressor override on the route for a backend with --compression gzip")
+	}
+	cfg, ok := entry.(ec.CompressorPerRouteConfig)
+	if !ok {
+		t.Fatalf("per-route compressor entry is %T, want ec.CompressorPerRouteConfig (a distinct message from ec.CompressorTypedConfig - Envoy rejects the wrong one at listener-load time)", entry)
+	}
+	if !cfg.Overrides.ResponseDirectionConfig.DefaultValue {
+		t.Error("expected the per-route override to enable compression")
+	}
+}
+
+func TestBuildLDSCompressionDoesNotLeakToOtherRoutes(t *testing.T) {
+	v := config.Values{Backends: []config.Backend{
+		{Name: "compressed", RoutePrefix: "/compressed/", Compression: "gzip", Timeout: "15s"},
+		{Name: "plain", RoutePrefix: "/plain/", Timeout: "15s"},
+	}}
+	routes := catchAllRoutes(BuildLDS(v))
+	for _, r := range routes {
+		_, hasOverride := r.TypedPerFilterConfig["envoy.filters.http.compressor"]
+		wantOverride := r.Route.Cluster == "compressed"
+		if hasOverride != wantOverride {
+			t.Errorf("route for %s: has compressor override=%v, want %v", r.Route.Cluster, hasOverride, wantOverride)
+		}
 	}
 }
 

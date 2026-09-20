@@ -192,6 +192,32 @@ config in `config/envoy.yaml`.
 - Backends with neither `--domain` nor `--route-prefix` still get a
   cluster, just no route.
 - Unmatched requests fall through to `default_app` (`:5050`).
+- `--http2` sets `typed_extension_protocol_options` on the cluster so
+  Envoy speaks HTTP/2 to that upstream (plus ALPN `h2` if `--tls` too) -
+  required for gRPC backends, since Envoy otherwise defaults every
+  cluster to HTTP/1.1 regardless of what the listener/client negotiated.
+  Use `--domain` with it, not `--route-prefix` (path rewriting breaks
+  gRPC's fixed paths). A gRPC/HTTP2 cluster needs its own struct fields
+  (`envoyconfig.Cluster.TypedExtensionProtocolOptions`,
+  `UpstreamTLSContext.AlpnProtocols`) - there was no way to express this
+  before this flag existed.
+- `--compression gzip` enables gzip response compression for one
+  backend's route, off by default and opt-in per backend (not
+  gateway-wide - compression would otherwise silently skew a perf test).
+  Implemented as a listener-wide `envoy.filters.http.compressor` filter
+  registered disabled (`render.go`'s `HTTPFilters`), with a per-route
+  `typed_per_filter_config` override turning it on - same "global default
+  + per-route override" shape `FaultPerRoute` already uses. **Non-obvious
+  gotcha**: the per-route override is a *different* Envoy message
+  (`CompressorPerRoute`) from the filter's own top-level config
+  (`Compressor`) - reusing the latter for both, as an earlier version of
+  this code did, fails at listener-load time with "Unable to unpack as
+  ...CompressorPerRoute", only visible via the admin API's
+  `/config_dump?resource=dynamic_listeners` `error_state` field, not a Go
+  compile error. Confirmed the fix against a real Envoy instance, not
+  just docs - if you add another per-route-overridable filter, check its
+  proto for a similar dedicated `*PerRoute` message before assuming the
+  filter's own config type works for both places.
 
 **Fault injection**: every route (each backend plus `default_app`) gets an
 independently toggleable fault config via a unique Envoy runtime key per

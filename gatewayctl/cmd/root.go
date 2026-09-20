@@ -29,6 +29,17 @@ func validateName(flag, value string) error {
 	return nil
 }
 
+// validateCompression only accepts "" (off) or "gzip" today. Kept as its
+// own function, rather than inlined at the one call site, so adding a
+// second algorithm (e.g. "brotli") later is a one-line change here
+// instead of hunting down every place compression is validated.
+func validateCompression(flag, value string) error {
+	if value != "" && value != "gzip" {
+		return fmt.Errorf("--%s %q: only \"gzip\" is supported", flag, value)
+	}
+	return nil
+}
+
 // validatePort rejects anything that isn't a usable TCP port. 0 is
 // excluded too - it's a valid uint16 but never a real upstream port, and
 // silently rendering it would just produce a cluster nothing can connect

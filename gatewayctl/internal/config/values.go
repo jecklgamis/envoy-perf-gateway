@@ -9,13 +9,25 @@ import (
 
 // Backend mirrors one entry in values.yaml's `backends` list.
 type Backend struct {
-	Name           string `yaml:"name"`
-	Host           string `yaml:"host"`
-	Port           int    `yaml:"port"`
-	TLS            bool   `yaml:"tls"`
-	Domain         string `yaml:"domain,omitempty"`
-	RoutePrefix    string `yaml:"route_prefix,omitempty"`
-	HostRewrite    string `yaml:"host_rewrite,omitempty"`
+	Name        string `yaml:"name"`
+	Host        string `yaml:"host"`
+	Port        int    `yaml:"port"`
+	TLS         bool   `yaml:"tls"`
+	Domain      string `yaml:"domain,omitempty"`
+	RoutePrefix string `yaml:"route_prefix,omitempty"`
+	HostRewrite string `yaml:"host_rewrite,omitempty"`
+	// HTTP2 makes Envoy speak HTTP/2 (not just accept it downstream) to
+	// this cluster's upstream - required for gRPC backends, since Envoy
+	// otherwise defaults every cluster to HTTP/1.1 regardless of what the
+	// listener or client negotiated.
+	HTTP2 bool `yaml:"http2,omitempty"`
+	// Compression enables response compression for this backend's route.
+	// Empty means off; "gzip" is the only supported value today. Off by
+	// default, per-backend opt-in rather than gateway-wide, since this is
+	// a perf-testing tool - compression changes latency/CPU
+	// characteristics that would otherwise silently skew a load test
+	// nobody asked to have compressed.
+	Compression    string `yaml:"compression,omitempty"`
 	ConnectTimeout string `yaml:"connect_timeout"`
 	Timeout        string `yaml:"timeout"`
 }

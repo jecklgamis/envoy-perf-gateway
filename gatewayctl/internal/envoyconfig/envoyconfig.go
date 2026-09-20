@@ -6,12 +6,16 @@
 package envoyconfig
 
 const (
-	TypeCluster     = "type.googleapis.com/envoy.config.cluster.v3.Cluster"
-	TypeListener    = "type.googleapis.com/envoy.config.listener.v3.Listener"
-	TypeHCM         = "type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager"
-	TypeRouter      = "type.googleapis.com/envoy.extensions.filters.http.router.v3.Router"
-	TypeFault       = "type.googleapis.com/envoy.extensions.filters.http.fault.v3.HTTPFault"
-	TypeUpstreamTLS = "type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext"
+	TypeCluster             = "type.googleapis.com/envoy.config.cluster.v3.Cluster"
+	TypeListener            = "type.googleapis.com/envoy.config.listener.v3.Listener"
+	TypeHCM                 = "type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager"
+	TypeRouter              = "type.googleapis.com/envoy.extensions.filters.http.router.v3.Router"
+	TypeFault               = "type.googleapis.com/envoy.extensions.filters.http.fault.v3.HTTPFault"
+	TypeUpstreamTLS         = "type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext"
+	TypeHTTPProtocolOptions = "type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions"
+	TypeCompressor          = "type.googleapis.com/envoy.extensions.filters.http.compressor.v3.Compressor"
+	TypeCompressorPerRoute  = "type.googleapis.com/envoy.extensions.filters.http.compressor.v3.CompressorPerRoute"
+	TypeGzipCompressor      = "type.googleapis.com/envoy.extensions.compression.gzip.compressor.v3.Gzip"
 )
 
 type SocketAddress struct {
@@ -43,22 +47,44 @@ type LoadAssignment struct {
 type UpstreamTLSContext struct {
 	Type string `yaml:"@type"`
 	SNI  string `yaml:"sni"`
+	// AlpnProtocols advertises protocol preference during the TLS
+	// handshake - set alongside TypedExtensionProtocolOptions below when a
+	// backend is HTTP/2, since some servers pick their behavior based on
+	// the negotiated ALPN result rather than just accepting whatever
+	// codec the client speaks first.
+	AlpnProtocols []string `yaml:"alpn_protocols,omitempty"`
 }
 
 type TransportSocket struct {
-	Name        string              `yaml:"name"`
+	Name        string             `yaml:"name"`
 	TypedConfig UpstreamTLSContext `yaml:"typed_config"`
 }
 
+// ExplicitHTTPConfig and HTTPProtocolOptions build the
+// typed_extension_protocol_options entry that tells Envoy to speak HTTP/2
+// to a cluster's upstream. Without this, Envoy defaults every cluster to
+// HTTP/1.1 upstream regardless of what the downstream listener or client
+// negotiated - this is what actually gRPC/HTTP2-enables a backend, not
+// anything on the listener side.
+type ExplicitHTTPConfig struct {
+	HTTP2ProtocolOptions map[string]any `yaml:"http2_protocol_options"`
+}
+
+type HTTPProtocolOptions struct {
+	Type               string             `yaml:"@type"`
+	ExplicitHTTPConfig ExplicitHTTPConfig `yaml:"explicit_http_config"`
+}
+
 type Cluster struct {
-	Type            string           `yaml:"@type"`
-	Name            string           `yaml:"name"`
-	ConnectTimeout  string           `yaml:"connect_timeout"`
-	ClusterType     string           `yaml:"type"`
-	DNSLookupFamily string           `yaml:"dns_lookup_family,omitempty"`
-	LBPolicy        string           `yaml:"lb_policy,omitempty"`
-	LoadAssignment  LoadAssignment   `yaml:"load_assignment"`
-	TransportSocket *TransportSocket `yaml:"transport_socket,omitempty"`
+	Type                          string           `yaml:"@type"`
+	Name                          string           `yaml:"name"`
+	ConnectTimeout                string           `yaml:"connect_timeout"`
+	ClusterType                   string           `yaml:"type"`
+	DNSLookupFamily               string           `yaml:"dns_lookup_family,omitempty"`
+	LBPolicy                      string           `yaml:"lb_policy,omitempty"`
+	LoadAssignment                LoadAssignment   `yaml:"load_assignment"`
+	TransportSocket               *TransportSocket `yaml:"transport_socket,omitempty"`
+	TypedExtensionProtocolOptions map[string]any   `yaml:"typed_extension_protocol_options,omitempty"`
 }
 
 type CDS struct {
@@ -162,6 +188,99 @@ func FaultPerRoute(target string) map[string]any {
 			AbortHTTPStatusRuntime: abortStatus,
 			DelayPercentRuntime:    delayPercent,
 			DelayDurationRuntime:   delayDuration,
+		},
+	}
+}
+
+// compressibleContentTypes is the set of response Content-Types worth
+// gzipping - text/JSON payloads compress well; skipping everything else
+// avoids wasting CPU re-compressing content (images, video, already-
+// compressed archives) that wouldn't shrink further.
+var compressibleContentTypes = []string{
+	"application/json",
+	"application/javascript",
+	"application/xml",
+	"text/plain",
+	"text/html",
+	"text/css",
+	"text/javascript",
+}
+
+type GzipCompressorLibraryConfig struct {
+	Type string `yaml:"@type"`
+}
+
+type CompressorLibrary struct {
+	Name        string `yaml:"name"`
+	TypedConfig any    `yaml:"typed_config"`
+}
+
+type RuntimeFeatureFlag struct {
+	DefaultValue bool `yaml:"default_value"`
+}
+
+type CompressorCommonDirectionConfig struct {
+	Enabled RuntimeFeatureFlag `yaml:"enabled"`
+}
+
+type CompressorResponseDirectionConfig struct {
+	CommonConfig     CompressorCommonDirectionConfig `yaml:"common_config"`
+	ContentType      []string                        `yaml:"content_type,omitempty"`
+	MinContentLength int                             `yaml:"min_content_length,omitempty"`
+}
+
+type CompressorTypedConfig struct {
+	Type                    string                            `yaml:"@type"`
+	CompressorLibrary       CompressorLibrary                 `yaml:"compressor_library"`
+	ResponseDirectionConfig CompressorResponseDirectionConfig `yaml:"response_direction_config"`
+}
+
+// Compressor builds the envoy.filters.http.compressor filter's own
+// top-level config - registered once in http_filters, default_value=false
+// so compression is off listener-wide unless a route overrides it.
+func Compressor() CompressorTypedConfig {
+	return CompressorTypedConfig{
+		Type: TypeCompressor,
+		CompressorLibrary: CompressorLibrary{
+			Name:        "gzip",
+			TypedConfig: GzipCompressorLibraryConfig{Type: TypeGzipCompressor},
+		},
+		ResponseDirectionConfig: CompressorResponseDirectionConfig{
+			CommonConfig:     CompressorCommonDirectionConfig{Enabled: RuntimeFeatureFlag{DefaultValue: false}},
+			ContentType:      compressibleContentTypes,
+			MinContentLength: 860,
+		},
+	}
+}
+
+// CompressorPerRouteOverrides and CompressorPerRouteConfig are a
+// *different* message from CompressorTypedConfig above -
+// envoy.extensions.filters.http.compressor.v3.CompressorPerRoute, not
+// another Compressor. Reusing the top-level Compressor message here (an
+// earlier version of this code did) fails at listener-load time with
+// "Unable to unpack as ...CompressorPerRoute" - confirmed against a real
+// Envoy instance via its /config_dump error_state, not just inferred from
+// docs. A route's typed_per_filter_config for the compressor filter can
+// only flip the enabled flag via this dedicated per-route message.
+type CompressorPerRouteOverrides struct {
+	ResponseDirectionConfig RuntimeFeatureFlag `yaml:"response_direction_config"`
+}
+
+type CompressorPerRouteConfig struct {
+	Type      string                      `yaml:"@type"`
+	Overrides CompressorPerRouteOverrides `yaml:"overrides"`
+}
+
+// CompressorPerRoute builds the typed_per_filter_config entry that turns
+// gzip response compression on for one route, overriding the
+// listener-wide default (off).
+func CompressorPerRoute() map[string]any {
+	return map[string]any{
+		"envoy.filters.http.compressor": CompressorPerRouteConfig{
+			Type: TypeCompressorPerRoute,
+			Overrides: CompressorPerRouteOverrides{
+				ResponseDirectionConfig: RuntimeFeatureFlag{DefaultValue: true},
+			},
 		},
 	}
 }
