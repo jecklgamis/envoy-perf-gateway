@@ -136,6 +136,8 @@ rationale for the HTTP/S3 distribution split.
 Found a bug, have a feature request, or want to submit a fix? Open an
 [issue](https://github.com/jecklgamis/envoy-perf-gateway/issues) or a
 [pull request](https://github.com/jecklgamis/envoy-perf-gateway/pulls).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for build/test commands and this
+project's conventions.
 
 ## License
 
