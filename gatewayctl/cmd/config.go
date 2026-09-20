@@ -33,11 +33,20 @@ var configGetCmd = &cobra.Command{
 	Use:   "get [key]",
 	Short: "Print one settings value, or all of them if no key is given",
 	Long: `Print one settings value, or all of them if no key is given.
-Recognized keys: mode, http.server-url, http.api-token, s3.bucket, s3.prefix.`,
+Recognized keys: mode, http.server-url, http.api-token, s3.bucket, s3.prefix.
+
+Asking for http.api-token directly prints the real value (you presumably
+need it for something, e.g. piping into curl); the "print everything"
+form redacts it instead, so a casual "gatewayctl config get" - the kind
+of thing that ends up pasted into a chat or a screenshot - doesn't leak
+it.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 1 {
-			value, ok := settingsGet(args[0])
+			// Asking for a key by name always shows its real value, even
+			// if it's tagged redact:"true" - settings.Redacted is only
+			// applied to the "print everything" dump below.
+			value, ok := settingsGet(appSettings, args[0])
 			if !ok {
 				return fmt.Errorf("unknown key %q (want: mode, http.server-url, http.api-token, s3.bucket, s3.prefix)", args[0])
 			}
@@ -48,7 +57,7 @@ Recognized keys: mode, http.server-url, http.api-token, s3.bucket, s3.prefix.`,
 			fmt.Printf("No settings configured (%s does not exist or is empty)\n", configPath)
 			return nil
 		}
-		data, err := yaml.Marshal(appSettings)
+		data, err := yaml.Marshal(settings.Redacted(appSettings))
 		if err != nil {
 			return err
 		}
@@ -57,18 +66,18 @@ Recognized keys: mode, http.server-url, http.api-token, s3.bucket, s3.prefix.`,
 	},
 }
 
-func settingsGet(key string) (string, bool) {
+func settingsGet(s settings.Settings, key string) (string, bool) {
 	switch key {
 	case "mode":
-		return appSettings.Mode, true
+		return s.Mode, true
 	case "http.server-url":
-		return appSettings.HTTP.ServerURL, true
+		return s.HTTP.ServerURL, true
 	case "http.api-token":
-		return appSettings.HTTP.APIToken, true
+		return s.HTTP.APIToken, true
 	case "s3.bucket":
-		return appSettings.S3.Bucket, true
+		return s.S3.Bucket, true
 	case "s3.prefix":
-		return appSettings.S3.Prefix, true
+		return s.S3.Prefix, true
 	default:
 		return "", false
 	}
@@ -107,7 +116,12 @@ var configSetCmd = &cobra.Command{
 		if err := settings.Save(configPath, appSettings); err != nil {
 			return err
 		}
-		fmt.Printf("Saved %s = %q to %s\n", key, value, configPath)
+		// Redact before echoing back what was saved - same reasoning as
+		// the "print everything" form of `get`: this confirmation is
+		// exactly the kind of line that ends up pasted into a chat or a
+		// terminal screenshot.
+		printedValue, _ := settingsGet(settings.Redacted(appSettings), key)
+		fmt.Printf("Saved %s = %q to %s\n", key, printedValue, configPath)
 		return nil
 	},
 }

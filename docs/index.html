@@ -431,6 +431,7 @@ go install github.com/jecklgamis/envoy-perf-gateway/gatewayctl@latest</code></pr
 <pre><code>./gatewayctl config set mode http
 ./gatewayctl config set http.server-url http://localhost:8090
 ./gatewayctl config set http.api-token default</code></pre>
+        <div class="note"><code>gatewayctl config get</code> (no key) and the confirmation line above both mask the token as <code>********</code> - it's the kind of output that ends up pasted into a chat or a screenshot. To see the real value, ask for it by name: <code>gatewayctl config get http.api-token</code>.</div>
       </div>
 
       <div class="step">
